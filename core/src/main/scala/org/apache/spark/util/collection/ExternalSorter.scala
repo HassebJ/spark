@@ -212,6 +212,7 @@ private[spark] class ExternalSorter[K, V, C](
         maybeSpillCollection(usingMap = false)
       }
     }
+//    partitionedIterator.flatMap(pair => pair._2).foreach(println)
   }
 
   /**

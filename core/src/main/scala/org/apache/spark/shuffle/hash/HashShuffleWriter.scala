@@ -63,6 +63,7 @@ private[spark] class HashShuffleWriter[K, V](
 
     for (elem <- iter) {
       val bucketId = dep.partitioner.getPartition(elem._1)
+//      println("in hashShuffleWriter" + shuffle.writers(bucketId).toString)
       shuffle.writers(bucketId).write(elem._1, elem._2)
     }
   }
@@ -70,6 +71,7 @@ private[spark] class HashShuffleWriter[K, V](
   /** Close this writer, passing along whether the map completed */
   override def stop(initiallySuccess: Boolean): Option[MapStatus] = {
     var success = initiallySuccess
+    println("in hashShuffleWriter")
     try {
       if (stopping) {
         return None
@@ -102,6 +104,7 @@ private[spark] class HashShuffleWriter[K, V](
 
   private def commitWritesAndBuildStatus(): MapStatus = {
     // Commit the writes. Get the size of each bucket block (total block size).
+    println("in hashShuffleWriter")
     val sizes: Array[Long] = shuffle.writers.map { writer: DiskBlockObjectWriter =>
       writer.commitAndClose()
       writer.fileSegment().length
@@ -110,6 +113,7 @@ private[spark] class HashShuffleWriter[K, V](
   }
 
   private def revertWrites(): Unit = {
+    println("in hashShuffleWriter")
     if (shuffle != null && shuffle.writers != null) {
       for (writer <- shuffle.writers) {
         writer.revertPartialWritesAndClose()

@@ -70,7 +70,15 @@ private[spark] class SortShuffleWriter[K, V, C](
       new ExternalSorter[K, V, V](
         aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
-    sorter.insertAll(records)
+    println("\n<<<<<<<<<<<<<<<<<< MapperID " +mapId+" >>>>>>>>>>>>>>>>>")
+    val (temp1,temp2 ) = records.duplicate
+    temp1.foreach(println)
+//    val records = temp2.toIterator
+    println("<<<<<<<<<<<<<<<<<<repeat " +mapId+">>>>>>>>>>>>>>>>>")
+//    records.foreach(println)
+
+    sorter.insertAll(temp2)
+
 
     // Don't bother including the time to open the merged output file in the shuffle write time,
     // because it just opens a single file, so is typically too fast to measure accurately
@@ -81,6 +89,9 @@ private[spark] class SortShuffleWriter[K, V, C](
     shuffleBlockResolver.writeIndexFile(dep.shuffleId, mapId, partitionLengths)
 
     mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
+//    println("<<<<<<<<<<<<<<<<<<"+mapStatus+ " " + mapId+">>>>>>>>>>>>>>>>>")
+
+
   }
 
   /** Close this writer, passing along whether the map completed */

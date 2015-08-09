@@ -64,6 +64,9 @@ private[spark] class HashShuffleReader[K, C](
       serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
     }
 
+//    println("\n<<<<<<<<<<<<<<<<<< recordIter  >>>>>>>>>>>>>>>>>")
+//    recordIter.foreach(println)
+
     // Update the context task metrics for each record read.
     val readMetrics = context.taskMetrics.createShuffleReadMetricsForDependency()
     val metricIter = CompletionIterator[(Any, Any), Iterator[(Any, Any)]](
@@ -92,6 +95,8 @@ private[spark] class HashShuffleReader[K, C](
       require(!dep.mapSideCombine, "Map-side combine without Aggregator specified!")
       interruptibleIter.asInstanceOf[Iterator[Product2[K, C]]]
     }
+//    println("\n<<<<<<<<<<<<<<<<<< Aggregated Iter  >>>>>>>>>>>>>>>>>")
+//    aggregatedIter.foreach(println)
 
     // Sort the output if there is a sort ordering defined.
     dep.keyOrdering match {
@@ -102,9 +107,14 @@ private[spark] class HashShuffleReader[K, C](
         sorter.insertAll(aggregatedIter)
         context.taskMetrics.incMemoryBytesSpilled(sorter.memoryBytesSpilled)
         context.taskMetrics.incDiskBytesSpilled(sorter.diskBytesSpilled)
+//        println("\n<<<<<<<<<<<<<<<<<< Sorted Iter  >>>>>>>>>>>>>>>>>")
+//        sorter.iterator.foreach(println)
         sorter.iterator
       case None =>
+//        println("\n<<<<<<<<<<<<<<<<<< Aggregated Iter  >>>>>>>>>>>>>>>>>")
+//        aggregatedIter.foreach(println)
         aggregatedIter
     }
+
   }
 }
