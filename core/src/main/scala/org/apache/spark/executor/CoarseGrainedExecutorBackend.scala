@@ -131,6 +131,15 @@ private[spark] class CoarseGrainedExecutorBackend(
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
   }
+
+  override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {
+    val msg = StragglerInfo(executorId, partitionSize, executionTime)
+    driver match {
+      case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+
+  }
 }
 
 private[spark] object CoarseGrainedExecutorBackend extends Logging {

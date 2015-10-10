@@ -47,6 +47,11 @@ private[spark] class MesosExecutorBackend
       .setData(ByteString.copyFrom(data))
       .build())
   }
+ //TODO yet to be implemented for mesos
+  override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {
+
+
+  }
 
   override def registered(
       driver: ExecutorDriver,

@@ -49,7 +49,7 @@ private[spark] class SortShuffleWriter[K, V, C](
   context.taskMetrics.shuffleWriteMetrics = Some(writeMetrics)
 
   /** Write a bunch of records to this task's output */
-  override def write(records: Iterator[Product2[K, V]]): Unit = {
+  override def write(tempRecords: Iterator[Product2[K, V]]): Unit = {
     sorter = if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
       new ExternalSorter[K, V, C](
@@ -70,14 +70,20 @@ private[spark] class SortShuffleWriter[K, V, C](
       new ExternalSorter[K, V, V](
         aggregator = None, Some(dep.partitioner), ordering = None, dep.serializer)
     }
-    println("\n<<<<<<<<<<<<<<<<<< MapperID " +mapId+" >>>>>>>>>>>>>>>>>")
-    val (temp1,temp2 ) = records.duplicate
-    temp1.foreach(println)
-//    val records = temp2.toIterator
-    println("<<<<<<<<<<<<<<<<<<repeat " +mapId+">>>>>>>>>>>>>>>>>")
-//    records.foreach(println)
 
-    sorter.insertAll(temp2)
+    val (records,printRecords ) = tempRecords.duplicate
+        println("\n<<<<<<<<<<<<<<<<<< MapperID " +mapId+" >>>>>>>>>>>>>>>>>")
+    //printRecords.foreach(kv => println("MapperID " +mapId+" "+ kv))
+    printRecords.foreach(kv => {
+      val bucketId = dep.partitioner.getPartition(kv._1)
+      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
+
+
+    })
+//    println("<<<<<<<<<<<<<<<<<<repeat " +mapId+">>>>>>>>>>>>>>>>>")
+
+
+    sorter.insertAll(records)
 
 
     // Don't bother including the time to open the merged output file in the shuffle write time,

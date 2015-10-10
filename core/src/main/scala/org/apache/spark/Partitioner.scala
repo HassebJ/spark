@@ -82,6 +82,7 @@ class HashPartitioner(partitions: Int) extends Partitioner {
 
   def getPartition(key: Any): Int = key match {
     case null => 0
+//    case s: String => if(s == "one" || s == "five" || s == "three" || s == "seven" || s == "nine") 1 else if (s == "two" || s == "six" || s == "four" || s == "eight" || s == "ten") 0 else Utils.nonNegativeMod(key.hashCode, numPartitions)
     case _ => Utils.nonNegativeMod(key.hashCode, numPartitions)
   }
 

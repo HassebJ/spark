@@ -57,15 +57,16 @@ private[spark] class HashShuffleReader[K, C](
     val serializerInstance = ser.newInstance()
 
     // Create a key/value iterator for each stream
-    val recordIter = wrappedStreams.flatMap { wrappedStream =>
+    val tempRecordIter = wrappedStreams.flatMap { wrappedStream =>
       // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
       // NextIterator. The NextIterator makes sure that close() is called on the
       // underlying InputStream when all records have been read.
       serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
     }
+    val (recordIter, printRecordIter) = tempRecordIter.duplicate
 
-//    println("\n<<<<<<<<<<<<<<<<<< recordIter  >>>>>>>>>>>>>>>>>")
-//    recordIter.foreach(println)
+//    println("\n<<<<<<<<<<<<<<<<<< recordIter" + handle.shuffleId+"  >>>>>>>>>>>>>>>>>")
+//    printRecordIter.foreach(println)
 
     // Update the context task metrics for each record read.
     val readMetrics = context.taskMetrics.createShuffleReadMetricsForDependency()
@@ -77,9 +78,12 @@ private[spark] class HashShuffleReader[K, C](
       context.taskMetrics().updateShuffleReadMetrics())
 
     // An interruptible iterator must be used here in order to support task cancellation
-    val interruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
+    val tempInterruptibleIter = new InterruptibleIterator[(Any, Any)](context, metricIter)
+    val (interruptibleIter, printInterruptibleIter) = tempInterruptibleIter.duplicate
+//        println("\n<<<<<<<<<<<<<<<<<< InterruptibleIter" + handle.shuffleId+"  >>>>>>>>>>>>>>>>>")
+//    printInterruptibleIter.foreach(println)
 
-    val aggregatedIter: Iterator[Product2[K, C]] = if (dep.aggregator.isDefined) {
+    val tempAggregatedIter: Iterator[Product2[K, C]] = if (dep.aggregator.isDefined) {
       if (dep.mapSideCombine) {
         // We are reading values that are already combined
         val combinedKeyValuesIterator = interruptibleIter.asInstanceOf[Iterator[(K, C)]]
@@ -95,8 +99,9 @@ private[spark] class HashShuffleReader[K, C](
       require(!dep.mapSideCombine, "Map-side combine without Aggregator specified!")
       interruptibleIter.asInstanceOf[Iterator[Product2[K, C]]]
     }
-//    println("\n<<<<<<<<<<<<<<<<<< Aggregated Iter  >>>>>>>>>>>>>>>>>")
-//    aggregatedIter.foreach(println)
+    val (aggregatedIter, printAggregatedIter) = tempAggregatedIter.duplicate
+//    println("\n<<<<<<<<<<<<<<<<<< Aggregated Iter" + handle.shuffleId+"  >>>>>>>>>>>>>>>>>")
+//    printAggregatedIter.foreach(println)
 
     // Sort the output if there is a sort ordering defined.
     dep.keyOrdering match {
@@ -111,7 +116,7 @@ private[spark] class HashShuffleReader[K, C](
 //        sorter.iterator.foreach(println)
         sorter.iterator
       case None =>
-//        println("\n<<<<<<<<<<<<<<<<<< Aggregated Iter  >>>>>>>>>>>>>>>>>")
+//        println("\n<<<<<<<<<<<<<<<<<< inner Aggregated Iter  >>>>>>>>>>>>>>>>>")
 //        aggregatedIter.foreach(println)
         aggregatedIter
     }

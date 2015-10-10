@@ -18,6 +18,8 @@
 // scalastyle:off println
 package org.apache.spark.examples
 
+import org.apache.log4j.{PatternLayout, ConsoleAppender, Level, Logger}
+
 import scala.util.Random
 import scala.collection.mutable
 
@@ -28,8 +30,8 @@ import org.apache.spark.SparkContext._
  * Transitive closure on a graph.
  */
 object SparkTC {
-  val numEdges = 200
-  val numVertices = 100
+  val numEdges = 3
+  val numVertices = 3
   val rand = new Random(42)
 
   def generateGraph: Seq[(Int, Int)] = {
@@ -43,7 +45,12 @@ object SparkTC {
   }
 
   def main(args: Array[String]) {
+    val rootLogger = Logger.getRootLogger()
+    rootLogger.setLevel(Level.ERROR)
+    rootLogger.addAppender(new ConsoleAppender(new PatternLayout("%-6r [%p] %c - %m%n")))
     val sparkConf = new SparkConf().setAppName("SparkTC")
+    //.set("spark.shuffle.manager", "hash")
+      .set("spark.default.parallelism", "4")
     val spark = new SparkContext(sparkConf)
     val slices = if (args.length > 0) args(0).toInt else 2
     var tc = spark.parallelize(generateGraph, slices).cache()

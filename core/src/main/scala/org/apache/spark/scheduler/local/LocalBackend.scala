@@ -21,6 +21,7 @@ import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
 
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.StragglerInfo
 import org.apache.spark.{Logging, SparkConf, SparkContext, SparkEnv, TaskState}
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.{Executor, ExecutorBackend}
@@ -31,6 +32,8 @@ import org.apache.spark.scheduler.cluster.ExecutorInfo
 private case class ReviveOffers()
 
 private case class StatusUpdate(taskId: Long, state: TaskState, serializedData: ByteBuffer)
+
+private case class StragglerInfo(executorId: String, partitionSize: Int, executionTime: Long)
 
 private case class KillTask(taskId: Long, interruptThread: Boolean)
 
@@ -70,6 +73,9 @@ private[spark] class LocalEndpoint(
 
     case KillTask(taskId, interruptThread) =>
       executor.killTask(taskId, interruptThread)
+
+    case StragglerInfo(executorId, partitionSize, executionTime) =>
+      println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
   }
 
   override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
@@ -141,6 +147,10 @@ private[spark] class LocalBackend(
 
   override def statusUpdate(taskId: Long, state: TaskState, serializedData: ByteBuffer) {
     localEndpoint.send(StatusUpdate(taskId, state, serializedData))
+  }
+
+  override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {
+    localEndpoint.send(StragglerInfo(executorId, partitionSize, executionTime) )
   }
 
   override def applicationId(): String = appId

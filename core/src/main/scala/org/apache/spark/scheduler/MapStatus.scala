@@ -31,6 +31,8 @@ import org.apache.spark.util.Utils
 private[spark] sealed trait MapStatus {
   /** Location where this task was run. */
   def location: BlockManagerId
+  var partitionSize  = 0
+
 
   /**
    * Estimated size for the reduce block, in bytes.

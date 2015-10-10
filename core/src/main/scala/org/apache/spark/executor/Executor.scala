@@ -29,7 +29,7 @@ import scala.util.control.NonFatal
 
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
-import org.apache.spark.scheduler.{DirectTaskResult, IndirectTaskResult, Task}
+import org.apache.spark.scheduler._
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.storage.{StorageLevel, TaskResultBlockId}
 import org.apache.spark.unsafe.memory.TaskMemoryManager
@@ -161,6 +161,8 @@ private[spark] class Executor(
     /** Whether this task has been killed. */
     @volatile private var killed = false
 
+    private var mapStatus: MapStatus = null
+
     /** How much the JVM process has spent in GC when the task starts to run. */
     @volatile var startGCTime: Long = _
 
@@ -187,6 +189,7 @@ private[spark] class Executor(
       execBackend.statusUpdate(taskId, TaskState.RUNNING, EMPTY_BYTE_BUFFER)
       var taskStart: Long = 0
       startGCTime = computeTotalGcTime()
+//      var status : MapStatus
 
       try {
         val (taskFiles, taskJars, taskBytes) = Task.deserializeWithDependencies(serializedTask)
@@ -210,12 +213,15 @@ private[spark] class Executor(
         // Run the actual task and measure its runtime.
         taskStart = System.currentTimeMillis()
         var threwException = true
+//        var status
         val (value, accumUpdates) = try {
           val res = task.run(
             taskAttemptId = taskId,
             attemptNumber = attemptNumber,
             metricsSystem = env.metricsSystem)
           threwException = false
+//          var status = res._1.asInstanceOf[CompressedMapStatus]
+
           res
         } finally {
           val freedMemory = taskMemoryManager.cleanUpAllAllocatedMemory()
@@ -230,10 +236,22 @@ private[spark] class Executor(
         }
         val taskFinish = System.currentTimeMillis()
 
+        if(value.isInstanceOf[MapStatus]){
+          println("value as MS: " + value.asInstanceOf[MapStatus].partitionSize)
+          execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
+            (taskFinish - taskStart) - task.executorDeserializeTime)
+        }else if (value.isInstanceOf[scala.Tuple2[Any, Any]]){
+          println("value as Tuple: " + value.getClass)
+        }else{
+          println("value as none: " )
+        }
+
         // If the task has been killed, let's fail it.
         if (task.killed) {
           throw new TaskKilledException
         }
+//        println("partitionSize in executor: " )
+
 
         val resultSer = env.serializer.newInstance()
         val beforeSerialization = System.currentTimeMillis()

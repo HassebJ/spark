@@ -68,10 +68,11 @@ private[spark] class ShuffleMapTask(
     try {
       val manager = SparkEnv.get.shuffleManager
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
-//      println("in shuflemaptask" + partitionId)
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
-//      println("in shuflemaptask" + rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]].length)
-      return writer.stop(success = true).get
+      val mapStatus = writer.stop(success = true).get
+      mapStatus.partitionSize = rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]].size
+      return mapStatus
+
     } catch {
       case e: Exception =>
         try {

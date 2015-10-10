@@ -50,6 +50,18 @@ private[spark] object CoarseGrainedClusterMessages {
     Utils.checkHostPort(hostPort, "Expected host port")
   }
 
+  case object TestMessage extends CoarseGrainedClusterMessage
+
+  case class StragglerInfo (executorId: String, partitionSize: Int, executionTime: Long)
+    extends CoarseGrainedClusterMessage
+
+//  object ExecutorInfo {
+//    def apply(executorId: String, partitionSize: Int, executionTime: Long)
+//      : ExecutorInfo = {
+//      ExecutorInfo(executorId, partitionSize, executionTime)
+//    }
+//  }
+
   case class StatusUpdate(executorId: String, taskId: Long, state: TaskState,
     data: SerializableBuffer) extends CoarseGrainedClusterMessage
 
