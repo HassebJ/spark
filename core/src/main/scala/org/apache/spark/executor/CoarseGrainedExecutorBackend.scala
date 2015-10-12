@@ -113,6 +113,10 @@ private[spark] class CoarseGrainedExecutorBackend(
       executor.stop()
       stop()
       rpcEnv.shutdown()
+
+    case ReleaseLock =>
+      println(s"Lock released by Executor: $executorId")
+      executor.releaseLock()
   }
 
   override def onDisconnected(remoteAddress: RpcAddress): Unit = {
@@ -136,6 +140,17 @@ private[spark] class CoarseGrainedExecutorBackend(
     val msg = StragglerInfo(executorId, partitionSize, executionTime)
     driver match {
       case Some(driverRef) => driverRef.send(msg)
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
+
+  }
+
+  override def lockAcquired(executorId: String) {
+    val msg = LockAcquired(executorId)
+    driver match {
+      case Some(driverRef) =>
+        println(s"lock acquired by $executorId and sending to driver")
+        driverRef.ask[LockAcquired.type](msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
 

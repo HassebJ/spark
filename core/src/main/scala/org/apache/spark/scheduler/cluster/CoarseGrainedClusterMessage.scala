@@ -37,6 +37,8 @@ private[spark] object CoarseGrainedClusterMessages {
 
   case object RegisteredExecutor extends CoarseGrainedClusterMessage
 
+  case object ReleaseLock extends CoarseGrainedClusterMessage
+
   case class RegisterExecutorFailed(message: String) extends CoarseGrainedClusterMessage
 
   // Executors to driver
@@ -54,6 +56,8 @@ private[spark] object CoarseGrainedClusterMessages {
 
   case class StragglerInfo (executorId: String, partitionSize: Int, executionTime: Long)
     extends CoarseGrainedClusterMessage
+//  LockAcquired
+  case class LockAcquired (executorId: String) extends CoarseGrainedClusterMessage
 
 //  object ExecutorInfo {
 //    def apply(executorId: String, partitionSize: Int, executionTime: Long)

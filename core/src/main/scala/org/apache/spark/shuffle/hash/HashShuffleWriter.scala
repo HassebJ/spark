@@ -55,11 +55,11 @@ private[spark] class HashShuffleWriter[K, V](
     val randInit = new Random(System.currentTimeMillis)
     val randNumber = randInit.nextString(4)
 
-    println("\n<<<<<<<<<<<<<<<<<< >>>>>>>>>>>>>>>>>")
+    println(s"\n<<<<<<<<<<<<<<<<<< $mapId >>>>>>>>>>>>>>>>>")
     val (records, printRecords) = tempRecords.duplicate
     printRecords.foreach(kv => {
       val bucketId = dep.partitioner.getPartition(kv._1)
-      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
+//      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
 
 
     })

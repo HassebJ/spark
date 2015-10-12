@@ -120,7 +120,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         }
 
       case StragglerInfo(executorId, partitionSize, executionTime) =>
-        println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
+//        println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
 
     }
 
@@ -168,6 +168,16 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
       case RetrieveSparkProps =>
         context.reply(sparkProperties)
+
+      case LockAcquired(executorId) =>
+        val lockStartTime = System.currentTimeMillis()
+        println(s"Lock for $executorId received by driver \n Press any key to release the lock...")
+        Console.readLine()
+        val lockReleaseTime = System.currentTimeMillis() - lockStartTime
+        println(s"Lock for $executorId kept for $lockReleaseTime ms ")
+        context.reply(ReleaseLock)
+
+
     }
 
     // Make fake resource offers on all executors

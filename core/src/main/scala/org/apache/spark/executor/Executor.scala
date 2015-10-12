@@ -23,10 +23,6 @@ import java.net.URL
 import java.nio.ByteBuffer
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 
-import scala.collection.JavaConversions._
-import scala.collection.mutable.{ArrayBuffer, HashMap}
-import scala.util.control.NonFatal
-
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.scheduler._
@@ -34,6 +30,11 @@ import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.storage.{StorageLevel, TaskResultBlockId}
 import org.apache.spark.unsafe.memory.TaskMemoryManager
 import org.apache.spark.util._
+
+import scala.concurrent.Lock
+import scala.collection.JavaConversions._
+import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.util.control.NonFatal
 
 /**
  * Spark executor, backed by a threadpool to run tasks.
@@ -60,6 +61,13 @@ private[spark] class Executor(
   private val EMPTY_BYTE_BUFFER = ByteBuffer.wrap(new Array[Byte](0))
 
   private val conf = env.conf
+
+  private val lock = new Lock()
+
+  private var lockStartTime = System.currentTimeMillis()
+  private var lockReleaseTime = System.currentTimeMillis()
+
+  private var isShuffleTask : Boolean = true
 
   // No ip or host:port - just hostname
   Utils.checkHost(executorHostname, "Expected executed slave to be a hostname")
@@ -145,6 +153,12 @@ private[spark] class Executor(
     }
   }
 
+  def releaseLock(): Unit = {
+    lock.release()
+    lockReleaseTime = System.currentTimeMillis() - lockStartTime
+    println(s"Executor: $executorId locked for $lockReleaseTime ms")
+  }
+
   /** Returns the total amount of time this JVM process has spent in garbage collection. */
   private def computeTotalGcTime(): Long = {
     ManagementFactory.getGarbageCollectorMXBeans.map(_.getCollectionTime).sum
@@ -162,6 +176,7 @@ private[spark] class Executor(
     @volatile private var killed = false
 
     private var mapStatus: MapStatus = null
+    private val lock1 = new Lock()
 
     /** How much the JVM process has spent in GC when the task starts to run. */
     @volatile var startGCTime: Long = _
@@ -235,22 +250,25 @@ private[spark] class Executor(
           }
         }
         val taskFinish = System.currentTimeMillis()
-
+        //check if it is an intermediate shuffle map task and not a result task so as to decide if to send
+        //straggler metrics back to the driver
         if(value.isInstanceOf[MapStatus]){
-          println("value as MS: " + value.asInstanceOf[MapStatus].partitionSize)
+          isShuffleTask = true
+//          println("value as MS: " + value.asInstanceOf[MapStatus].partitionSize)
           execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
             (taskFinish - taskStart) - task.executorDeserializeTime)
-        }else if (value.isInstanceOf[scala.Tuple2[Any, Any]]){
-          println("value as Tuple: " + value.getClass)
+
+//        }else if (value.isInstanceOf[scala.Tuple2[Any, Any]]){
+////          println("value as Tuple: " + value.getClass)
         }else{
-          println("value as none: " )
+          isShuffleTask = false
+//          println("value as none: " )
         }
 
         // If the task has been killed, let's fail it.
         if (task.killed) {
           throw new TaskKilledException
         }
-//        println("partitionSize in executor: " )
 
 
         val resultSer = env.serializer.newInstance()
@@ -292,8 +310,16 @@ private[spark] class Executor(
             serializedDirectResult
           }
         }
+        if(isShuffleTask == true){
+          execBackend.lockAcquired(executorId)
+          lockStartTime = System.currentTimeMillis()
+          lock.acquire()
+          lock.acquire()
+          lock.release()
+        }
 
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
+
 
       } catch {
         case ffe: FetchFailedException =>
@@ -337,7 +363,12 @@ private[spark] class Executor(
         env.blockManager.memoryStore.releaseUnrollMemoryForThisThread()
         runningTasks.remove(taskId)
       }
+    //put locks here only if current task is a shuffle task and not a result task
+
+
+
     }
+
   }
 
   /**

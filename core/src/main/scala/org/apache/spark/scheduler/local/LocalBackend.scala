@@ -21,7 +21,7 @@ import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
 
-import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.StragglerInfo
+//import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.{RegisteredExecutor, ReleaseLock, LockAcquired, StragglerInfo}
 import org.apache.spark.{Logging, SparkConf, SparkContext, SparkEnv, TaskState}
 import org.apache.spark.TaskState.TaskState
 import org.apache.spark.executor.{Executor, ExecutorBackend}
@@ -35,9 +35,13 @@ private case class StatusUpdate(taskId: Long, state: TaskState, serializedData: 
 
 private case class StragglerInfo(executorId: String, partitionSize: Int, executionTime: Long)
 
+private case class LockAcquired(executorId: String)
+
 private case class KillTask(taskId: Long, interruptThread: Boolean)
 
 private case class StopExecutor()
+
+private case class ReleaseLock()
 
 /**
  * Calls to LocalBackend are all serialized through LocalEndpoint. Using an RpcEndpoint makes the
@@ -53,6 +57,9 @@ private[spark] class LocalEndpoint(
   extends ThreadSafeRpcEndpoint with Logging {
 
   private var freeCores = totalCores
+
+  private var lockStartTime = System.currentTimeMillis()
+  private var lockReleaseTime = System.currentTimeMillis()
 
   val localExecutorId = SparkContext.DRIVER_IDENTIFIER
   val localExecutorHostname = "localhost"
@@ -74,6 +81,9 @@ private[spark] class LocalEndpoint(
     case KillTask(taskId, interruptThread) =>
       executor.killTask(taskId, interruptThread)
 
+    case ReleaseLock =>
+      executor.releaseLock()
+
     case StragglerInfo(executorId, partitionSize, executionTime) =>
       println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
   }
@@ -82,6 +92,15 @@ private[spark] class LocalEndpoint(
     case StopExecutor =>
       executor.stop()
       context.reply(true)
+
+    case LockAcquired(executorId) =>
+      lockStartTime = System.currentTimeMillis()
+      println(s"Lock for $executorId received by driver \n Press any key to release the lock")
+      Console.readLine()
+      lockReleaseTime = System.currentTimeMillis() - lockStartTime
+      println(s"Lock kept by driver for $lockReleaseTime ms")
+      executor.releaseLock()
+
   }
 
   def reviveOffers() {
@@ -147,6 +166,11 @@ private[spark] class LocalBackend(
 
   override def statusUpdate(taskId: Long, state: TaskState, serializedData: ByteBuffer) {
     localEndpoint.send(StatusUpdate(taskId, state, serializedData))
+  }
+
+  override def lockAcquired(executorId: String) {
+    println(s"lock acquired by $executorId and sending to driver")
+    localEndpoint.ask[LockAcquired.type](LockAcquired(executorId))
   }
 
   override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {

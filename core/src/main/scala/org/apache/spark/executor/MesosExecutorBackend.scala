@@ -49,8 +49,9 @@ private[spark] class MesosExecutorBackend
   }
  //TODO yet to be implemented for mesos
   override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {
+  }
 
-
+  override def lockAcquired(executorId: String) {
   }
 
   override def registered(

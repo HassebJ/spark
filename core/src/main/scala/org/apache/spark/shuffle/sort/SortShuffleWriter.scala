@@ -72,11 +72,11 @@ private[spark] class SortShuffleWriter[K, V, C](
     }
 
     val (records,printRecords ) = tempRecords.duplicate
-        println("\n<<<<<<<<<<<<<<<<<< MapperID " +mapId+" >>>>>>>>>>>>>>>>>")
+//        println("\n<<<<<<<<<<<<<<<<<< MapperID " +mapId+" >>>>>>>>>>>>>>>>>")
     //printRecords.foreach(kv => println("MapperID " +mapId+" "+ kv))
     printRecords.foreach(kv => {
       val bucketId = dep.partitioner.getPartition(kv._1)
-      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
+//      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
 
 
     })

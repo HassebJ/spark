@@ -56,6 +56,7 @@ private[spark] class ShuffleMapTask(
   }
 
   override def runTask(context: TaskContext): MapStatus = {
+    println("\n<<<<<<<<<<<<<<<<<< StageId: " +stageId+" >>>>>>>>>>>>>>>>>")
     // Deserialize the RDD using the broadcast variable.
     val deserializeStartTime = System.currentTimeMillis()
     val ser = SparkEnv.get.closureSerializer.newInstance()
