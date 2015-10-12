@@ -15,6 +15,7 @@ build/*.jar
 cache
 .generated-mima*
 work/
+sample/
 out/
 .DS_Store
 third_party/libmesos.so
