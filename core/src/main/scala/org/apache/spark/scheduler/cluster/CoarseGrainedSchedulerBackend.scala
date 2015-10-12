@@ -122,6 +122,21 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       case StragglerInfo(executorId, partitionSize, executionTime) =>
 //        println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
 
+      case LockAcquired(executorId) =>
+        val lockStartTime = System.currentTimeMillis()
+        println(s"Lock for $executorId received by driver \n Press any key to release the lock...")
+        Console.readLine()
+
+        val lockReleaseTime = System.currentTimeMillis() - lockStartTime
+        println(s"Lock for $executorId kept for $lockReleaseTime ms ")
+        executorDataMap.get(executorId) match {
+          case Some(executorInfo) =>
+            executorInfo.executorEndpoint.send(ReleaseLock)
+          case None =>
+            // Ignoring the task kill since the executor is not registered.
+            logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
+        }
+
     }
 
     override def receiveAndReply(context: RpcCallContext): PartialFunction[Any, Unit] = {
@@ -168,15 +183,6 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
       case RetrieveSparkProps =>
         context.reply(sparkProperties)
-
-      case LockAcquired(executorId) =>
-        val lockStartTime = System.currentTimeMillis()
-        println(s"Lock for $executorId received by driver \n Press any key to release the lock...")
-        Console.readLine()
-        val lockReleaseTime = System.currentTimeMillis() - lockStartTime
-        println(s"Lock for $executorId kept for $lockReleaseTime ms ")
-        context.reply(ReleaseLock)
-
 
     }
 

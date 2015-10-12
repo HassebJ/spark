@@ -150,7 +150,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     driver match {
       case Some(driverRef) =>
         println(s"lock acquired by $executorId and sending to driver")
-        driverRef.ask[LockAcquired.type](msg)
+        driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
 
