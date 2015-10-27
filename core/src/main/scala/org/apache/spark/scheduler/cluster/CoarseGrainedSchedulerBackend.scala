@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 
 import org.apache.spark.rpc._
-import org.apache.spark.{ExecutorAllocationClient, Logging, SparkEnv, SparkException, TaskState}
+import org.apache.spark._
 import org.apache.spark.scheduler._
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.util.{ThreadUtils, SerializableBuffer, AkkaUtils, Utils}
@@ -119,13 +119,19 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
         }
 
+      case KeyCounts(executorId, data) =>
+        val env = SparkEnv.get
+        println(s"keyCounts of $executorId")
+        val keyCounts :Map[_, Int] = env.closureSerializer.newInstance().deserialize[Map[_, Int]](data)
+        keyCounts.take(5).foreach(println)
+
       case StragglerInfo(executorId, partitionSize, executionTime) =>
-//        println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
+        println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
 
       case LockAcquired(executorId) =>
         val lockStartTime = System.currentTimeMillis()
-        println(s"Lock for $executorId received by driver \n Press any key to release the lock...")
-        Console.readLine()
+        println(s"Lock for $executorId received by driver \nPress any key to release the lock...")
+//        Console.readLine()
 
         val lockReleaseTime = System.currentTimeMillis() - lockStartTime
         println(s"Lock for $executorId kept for $lockReleaseTime ms ")
@@ -133,8 +139,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
           case Some(executorInfo) =>
             executorInfo.executorEndpoint.send(ReleaseLock)
           case None =>
-            // Ignoring the task kill since the executor is not registered.
-            logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
+            logWarning(s"Driver unable to release lock for executor: $executorId")
         }
 
     }

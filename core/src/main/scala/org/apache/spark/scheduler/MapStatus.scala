@@ -32,6 +32,9 @@ private[spark] sealed trait MapStatus {
   /** Location where this task was run. */
   def location: BlockManagerId
   var partitionSize  = 0
+  var keyCounts : Map[Any, Int] = _
+//  def iterator: Iterator[_ <: Product2[Any, Any]]
+
 
 
   /**
@@ -55,6 +58,7 @@ private[spark] object MapStatus {
   }
 
   private[this] val LOG_BASE = 1.1
+
 
   /**
    * Compress a size in bytes to 8 bits for efficient reporting of map output sizes.
@@ -96,6 +100,8 @@ private[spark] class CompressedMapStatus(
     private[this] var compressedSizes: Array[Byte])
   extends MapStatus with Externalizable {
 
+//  var iterator: Iterator[_ <: Product2[Any, Any]] = null
+
   protected def this() = this(null, null.asInstanceOf[Array[Byte]])  // For deserialization only
 
   def this(loc: BlockManagerId, uncompressedSizes: Array[Long]) {
@@ -103,6 +109,8 @@ private[spark] class CompressedMapStatus(
   }
 
   override def location: BlockManagerId = loc
+
+
 
   override def getSizeForBlock(reduceId: Int): Long = {
     MapStatus.decompressSize(compressedSizes(reduceId))
@@ -138,6 +146,8 @@ private[spark] class HighlyCompressedMapStatus private (
     private[this] var emptyBlocks: RoaringBitmap,
     private[this] var avgSize: Long)
   extends MapStatus with Externalizable {
+
+//  var iterator: Iterator[_ <: Product2[Any, Any]] = null
 
   // loc could be null when the default constructor is called during deserialization
   require(loc == null || avgSize > 0 || numNonEmptyBlocks == 0,

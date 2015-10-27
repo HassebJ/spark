@@ -71,7 +71,9 @@ private[spark] class ShuffleMapTask(
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
       val mapStatus = writer.stop(success = true).get
-      mapStatus.partitionSize = rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]].size
+      val (sizeIter, countIter) = rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]].duplicate
+      mapStatus.partitionSize = sizeIter.size
+      mapStatus.keyCounts = util.collection.Utils.counts(countIter.map(_._1))
       return mapStatus
 
     } catch {

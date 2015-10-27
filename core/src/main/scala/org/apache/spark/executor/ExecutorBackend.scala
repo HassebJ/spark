@@ -28,5 +28,6 @@ private[spark] trait ExecutorBackend {
   def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer)
   def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long)
   def lockAcquired(executorId: String)
+  def sendKeyCounts(executorId: String, data: ByteBuffer)
 }
 

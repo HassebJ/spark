@@ -59,12 +59,7 @@ private[spark] object CoarseGrainedClusterMessages {
 //  LockAcquired
   case class LockAcquired (executorId: String) extends CoarseGrainedClusterMessage
 
-//  object ExecutorInfo {
-//    def apply(executorId: String, partitionSize: Int, executionTime: Long)
-//      : ExecutorInfo = {
-//      ExecutorInfo(executorId, partitionSize, executionTime)
-//    }
-//  }
+  case class KeyCounts(executorId: String, data: ByteBuffer) extends CoarseGrainedClusterMessage
 
   case class StatusUpdate(executorId: String, taskId: Long, state: TaskState,
     data: SerializableBuffer) extends CoarseGrainedClusterMessage

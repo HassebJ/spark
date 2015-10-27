@@ -235,8 +235,6 @@ private[spark] class Executor(
             attemptNumber = attemptNumber,
             metricsSystem = env.metricsSystem)
           threwException = false
-//          var status = res._1.asInstanceOf[CompressedMapStatus]
-
           res
         } finally {
           val freedMemory = taskMemoryManager.cleanUpAllAllocatedMemory()
@@ -250,20 +248,6 @@ private[spark] class Executor(
           }
         }
         val taskFinish = System.currentTimeMillis()
-        //check if it is an intermediate shuffle map task and not a result task so as to decide if to send
-        //straggler metrics back to the driver
-        if(value.isInstanceOf[MapStatus]){
-          isShuffleTask = true
-//          println("value as MS: " + value.asInstanceOf[MapStatus].partitionSize)
-          execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
-            (taskFinish - taskStart) - task.executorDeserializeTime)
-
-//        }else if (value.isInstanceOf[scala.Tuple2[Any, Any]]){
-////          println("value as Tuple: " + value.getClass)
-        }else{
-          isShuffleTask = false
-//          println("value as none: " )
-        }
 
         // If the task has been killed, let's fail it.
         if (task.killed) {
@@ -273,6 +257,20 @@ private[spark] class Executor(
 
         val resultSer = env.serializer.newInstance()
         val beforeSerialization = System.currentTimeMillis()
+        //check if it is an intermediate shuffle map task and not a result task so as to decide if to send
+        //straggler metrics back to the driver
+        if(value.isInstanceOf[MapStatus]){
+          isShuffleTask = true
+          val keyCountBytes = resultSer.serialize(value.asInstanceOf[MapStatus].keyCounts.take(3))
+          execBackend.sendKeyCounts(executorId, keyCountBytes)
+
+          execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
+            (taskFinish - taskStart) - task.executorDeserializeTime)
+
+//          value.asInstanceOf[MapStatus].keyCounts = null
+        }else{
+          isShuffleTask = false
+        }
         val valueBytes = resultSer.serialize(value)
         val afterSerialization = System.currentTimeMillis()
 
@@ -310,13 +308,13 @@ private[spark] class Executor(
             serializedDirectResult
           }
         }
-        if(isShuffleTask == true){
-          execBackend.lockAcquired(executorId)
-          lockStartTime = System.currentTimeMillis()
-          lock.acquire()
-          lock.acquire()
-          lock.release()
-        }
+//        if(isShuffleTask == true){
+//          execBackend.lockAcquired(executorId)
+//          lockStartTime = System.currentTimeMillis()
+//          lock.acquire()
+//          lock.acquire()
+//          lock.release()
+//        }
 
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
 

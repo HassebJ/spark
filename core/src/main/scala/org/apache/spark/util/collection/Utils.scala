@@ -18,6 +18,8 @@
 package org.apache.spark.util.collection
 
 import scala.collection.JavaConversions.{collectionAsScalaIterable, asJavaIterator}
+import scala.collection.TraversableOnce
+import scala.collection.mutable.HashMap
 
 import com.google.common.collect.{Ordering => GuavaOrdering}
 
@@ -36,4 +38,9 @@ private[spark] object Utils {
     }
     collectionAsScalaIterable(ordering.leastOf(asJavaIterator(input), num)).iterator
   }
+
+  def counts[T](xs: TraversableOnce[T]): Map[T, Int] = {
+    xs.foldLeft(HashMap.empty[T, Int].withDefaultValue(0))((acc, x) => { acc(x) += 1; acc}).toMap
+  }
+
 }

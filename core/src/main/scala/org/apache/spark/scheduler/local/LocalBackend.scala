@@ -37,6 +37,8 @@ private case class StragglerInfo(executorId: String, partitionSize: Int, executi
 
 private case class LockAcquired(executorId: String)
 
+private case class KeyCounts(executorId: String, data: ByteBuffer)
+
 private case class KillTask(taskId: Long, interruptThread: Boolean)
 
 private case class StopExecutor()
@@ -84,6 +86,12 @@ private[spark] class LocalEndpoint(
     case ReleaseLock =>
       executor.releaseLock()
 
+    case KeyCounts(executorId, data) =>
+      val env = SparkEnv.get
+      val keyCounts :Map[_, Int] = env.closureSerializer.newInstance().deserialize[Map[_, Int]](data)
+      println(s"keyCounts of $executorId")
+      keyCounts.take(5).foreach(println)
+
     case StragglerInfo(executorId, partitionSize, executionTime) =>
       println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
   }
@@ -92,6 +100,13 @@ private[spark] class LocalEndpoint(
     case StopExecutor =>
       executor.stop()
       context.reply(true)
+//
+//    case KeyCounts(executorId, data) =>
+//      val env = SparkEnv.get
+//      val keyCounts :Map[_, Int] = env.closureSerializer.newInstance().deserialize[Map[_, Int]](data)
+//      println(s"keyCounts of $executorId")
+//      keyCounts.take(5).foreach(println)
+//      context.reply(true)
 
     case LockAcquired(executorId) =>
       lockStartTime = System.currentTimeMillis()
@@ -175,6 +190,11 @@ private[spark] class LocalBackend(
 
   override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {
     localEndpoint.send(StragglerInfo(executorId, partitionSize, executionTime) )
+  }
+
+  override def sendKeyCounts(executorId: String, data: ByteBuffer) {
+    localEndpoint.send(KeyCounts(executorId, data) )
+//    localEndpoint.askWithRetry(KeyCounts(executorId, data))
   }
 
   override def applicationId(): String = appId
