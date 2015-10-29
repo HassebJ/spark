@@ -24,6 +24,8 @@ import org.roaringbitmap.RoaringBitmap
 import org.apache.spark.storage.BlockManagerId
 import org.apache.spark.util.Utils
 
+import scala.collection.immutable.HashMap
+
 /**
  * Result returned by a ShuffleMapTask to a scheduler. Includes the block manager address that the
  * task ran on as well as the sizes of outputs for each reducer, for passing on to the reduce tasks.
@@ -32,7 +34,7 @@ private[spark] sealed trait MapStatus {
   /** Location where this task was run. */
   def location: BlockManagerId
   var partitionSize  = 0
-  var keyCounts : Map[Any, Int] = _
+  var keyCounts : HashMap[Any, Int] = new HashMap[Any, Int]()
 //  def iterator: Iterator[_ <: Product2[Any, Any]]
 
 

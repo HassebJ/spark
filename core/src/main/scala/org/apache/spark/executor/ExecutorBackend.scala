@@ -21,6 +21,8 @@ import java.nio.ByteBuffer
 
 import org.apache.spark.TaskState.TaskState
 
+import scala.collection.immutable.HashMap
+
 /**
  * A pluggable interface used by the Executor to send updates to the cluster scheduler.
  */
@@ -28,6 +30,8 @@ private[spark] trait ExecutorBackend {
   def statusUpdate(taskId: Long, state: TaskState, data: ByteBuffer)
   def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long)
   def lockAcquired(executorId: String)
-  def sendKeyCounts(executorId: String, data: ByteBuffer)
+//  def sendKeyCounts(executorId: String, data: ByteBuffer)
+def sendKeyCounts(executorId: String, data: HashMap[Any, Int])
+//  HashMap[Any, Int]
 }
 

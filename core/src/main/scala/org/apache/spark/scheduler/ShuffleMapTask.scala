@@ -19,6 +19,7 @@ package org.apache.spark.scheduler
 
 import java.nio.ByteBuffer
 
+import scala.collection.immutable.HashMap
 import scala.language.existentials
 
 import org.apache.spark._
@@ -73,7 +74,7 @@ private[spark] class ShuffleMapTask(
       val mapStatus = writer.stop(success = true).get
       val (sizeIter, countIter) = rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]].duplicate
       mapStatus.partitionSize = sizeIter.size
-      mapStatus.keyCounts = util.collection.Utils.counts(countIter.map(_._1))
+      mapStatus.keyCounts = util.collection.Utils.counts(countIter.map(_._1)).asInstanceOf[HashMap[Any, Int]]
       return mapStatus
 
     } catch {

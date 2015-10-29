@@ -149,7 +149,7 @@ private[spark] class CoarseGrainedExecutorBackend(
     val msg = KeyCounts(executorId, data)
     driver match {
       case Some(driverRef) =>
-        driverRef.send(msg)
+        driverRef.askWithRetry[Boolean](KeyCounts(executorId, data))
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
 

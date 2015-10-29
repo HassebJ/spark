@@ -261,8 +261,34 @@ private[spark] class Executor(
         //straggler metrics back to the driver
         if(value.isInstanceOf[MapStatus]){
           isShuffleTask = true
-          val keyCountBytes = resultSer.serialize(value.asInstanceOf[MapStatus].keyCounts.take(3))
-          execBackend.sendKeyCounts(executorId, keyCountBytes)
+          val keyCounts = value.asInstanceOf[MapStatus].keyCounts
+//          val keyCountBytes = resultSer.serialize(value.asInstanceOf[MapStatus].keyCounts)
+//
+//          val directKeyCount = new DirectTaskResult(keyCountBytes, accumUpdates, task.metrics.orNull)
+//          val serializedDirectKeyCount = ser.serialize(directKeyCount)
+//          val resultSize = serializedDirectKeyCount.limit
+//
+//          val serializedKeyCount: ByteBuffer = {
+//            if (maxResultSize > 0 && resultSize > maxResultSize) {
+//              logWarning(s"Finished $taskName (TID $taskId). Result is larger than maxResultSize " +
+//                s"(${Utils.bytesToString(resultSize)} > ${Utils.bytesToString(maxResultSize)}), " +
+//                s"dropping it.")
+//              ser.serialize(new IndirectTaskResult[Any](TaskResultBlockId(taskId), resultSize))
+//            } else if (resultSize >= akkaFrameSize - AkkaUtils.reservedSizeBytes) {
+//              val blockId = TaskResultBlockId(taskId)
+//              env.blockManager.putBytes(
+//                blockId, serializedDirectKeyCount, StorageLevel.MEMORY_AND_DISK_SER)
+//              logInfo(
+//                s"Finished $taskName (TID $taskId). $resultSize bytes result sent via BlockManager)")
+//              ser.serialize(new IndirectTaskResult[Any](blockId, resultSize))
+//            } else {
+//              logInfo(s"Finished $taskName (TID $taskId). $resultSize bytes result sent to driver")
+//              serializedDirectKeyCount
+//            }
+//          }
+
+//          execBackend.sendKeyCounts(executorId, serializedKeyCount)
+          execBackend.sendKeyCounts(executorId, keyCounts)
 
           execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
             (taskFinish - taskStart) - task.executorDeserializeTime)

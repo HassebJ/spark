@@ -21,12 +21,15 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
+import scala.language.existentials
 
 import org.apache.spark.rpc._
 import org.apache.spark._
 import org.apache.spark.scheduler._
 import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages._
 import org.apache.spark.util.{ThreadUtils, SerializableBuffer, AkkaUtils, Utils}
+
+import scala.util.control.NonFatal
 
 /**
  * A scheduler backend that waits for coarse grained executors to connect to it through Akka.
@@ -40,6 +43,7 @@ private[spark]
 class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: RpcEnv)
   extends ExecutorAllocationClient with SchedulerBackend with Logging
 {
+  val keyCountsMap :scala.collection.concurrent.TrieMap[Any, Int] = new scala.collection.concurrent.TrieMap[Any, Int]()
   // Use an atomic variable to track total number of cores in the cluster for simplicity and speed
   var totalCoreCount = new AtomicInteger(0)
   // Total number of executors that are currently registered
@@ -62,6 +66,10 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   private var numPendingExecutors = 0
 
   private val listenerBus = scheduler.sc.listenerBus
+
+  private val THREADS = SparkEnv.get.conf.getInt("spark.resultGetter.threads", 4)
+  private val getTaskResultExecutor = ThreadUtils.newDaemonFixedThreadPool(
+    THREADS, "task-result-getter")
 
   // Executors we have requested the cluster manager to kill that have not died yet
   private val executorsPendingToRemove = new HashSet[String]
@@ -119,11 +127,45 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
         }
 
-      case KeyCounts(executorId, data) =>
-        val env = SparkEnv.get
-        println(s"keyCounts of $executorId")
-        val keyCounts :Map[_, Int] = env.closureSerializer.newInstance().deserialize[Map[_, Int]](data)
-        keyCounts.take(5).foreach(println)
+//      case KeyCounts(executorId, serializedData) =>
+//        val env = SparkEnv.get
+//        val execId = executorId
+//        println(s"keyCounts of $executorId shakalaka boom boom")
+//        getTaskResultExecutor.execute(new Runnable {
+//          override def run(): Unit = Utils.logUncaughtExceptions {
+//            try {
+//              val (result, size) = env.closureSerializer.newInstance().deserialize[TaskResult[_]](serializedData) match {
+//                case directResult: DirectTaskResult[_] =>
+//                  directResult.value()
+//                  (directResult, serializedData.limit())
+//                case IndirectTaskResult(blockId, size) =>
+//
+//                  val serializedTaskResult = env.blockManager.getRemoteBytes(blockId)
+//                  if (!serializedTaskResult.isDefined) {
+//                    logError("Exception while getting task result: serializedTaskResult undefined")
+//                    return
+//                  }
+//                  val deserializedResult = env.closureSerializer.newInstance().deserialize[DirectTaskResult[_]](
+//                    serializedTaskResult.get)
+//                  env.blockManager.master.removeBlock(blockId)
+//                  (deserializedResult, size)
+//              }
+//
+//              val recMap = result.value().asInstanceOf[Map[_, Int]]
+//
+//              keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
+//              keyCountsMap.foreach(x => println(s"ExecutorId : $execId => $x"))
+//
+//            } catch {
+//              case cnf: ClassNotFoundException =>
+//                val loader = Thread.currentThread.getContextClassLoader
+//                logError("Exception while getting task result", cnf)
+//              case NonFatal(ex) =>
+//                logError("Exception while getting task result", ex)
+//
+//            }
+//          }
+//        })
 
       case StragglerInfo(executorId, partitionSize, executionTime) =>
         println(s"hurrah! received at driver executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
@@ -174,6 +216,49 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
       case StopDriver =>
         context.reply(true)
         stop()
+
+      case KeyCounts(executorId, serializedData) =>
+        val env = SparkEnv.get
+        val execId = executorId
+        println(s"keyCounts of $executorId shakalaka boom boom")
+        context.reply(true)
+        getTaskResultExecutor.execute(new Runnable {
+          override def run(): Unit = Utils.logUncaughtExceptions {
+            try {
+              val (result, size) = env.closureSerializer.newInstance().deserialize[TaskResult[_]](serializedData) match {
+                case directResult: DirectTaskResult[_] =>
+                  directResult.value()
+                  (directResult, serializedData.limit())
+                case IndirectTaskResult(blockId, size) =>
+
+                  val serializedTaskResult = env.blockManager.getRemoteBytes(blockId)
+                  if (!serializedTaskResult.isDefined) {
+                    logError("Exception while getting task result: serializedTaskResult undefined")
+                    return
+                  }
+                  val deserializedResult = env.closureSerializer.newInstance().deserialize[DirectTaskResult[_]](
+                    serializedTaskResult.get)
+                  env.blockManager.master.removeBlock(blockId)
+                  (deserializedResult, size)
+              }
+
+              val recMap = result.value().asInstanceOf[scala.collection.immutable.HashMap[_, Int]]
+
+              keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
+              keyCountsMap.foreach(x => println(s"ExecutorId : $execId => $x"))
+
+              //            result.metrics.setResultSize(size)
+
+            } catch {
+              case cnf: ClassNotFoundException =>
+                val loader = Thread.currentThread.getContextClassLoader
+                logError("Exception while getting task result", cnf)
+              case NonFatal(ex) =>
+                logError("Exception while getting task result", ex)
+
+            }
+          }
+        })
 
       case StopExecutors =>
         logInfo("Asking each executor to shut down")
