@@ -51,7 +51,7 @@ private[spark] class MesosExecutorBackend
   override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {
   }
 
-  override def sendKeyCounts(executorId: String, data: ByteBuffer) {
+  override def sendKeyCounts(executorId: String, data: scala.collection.immutable.HashMap[Any, Int]) {
   }
 
   override def lockAcquired(executorId: String) {

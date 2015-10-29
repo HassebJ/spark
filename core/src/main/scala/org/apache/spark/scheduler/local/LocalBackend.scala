@@ -149,55 +149,56 @@ private[spark] class LocalEndpoint(
       executor.stop()
       context.reply(true)
 
-    case KeyCounts(executorId, serializedData) =>
-      val env = SparkEnv.get
-      val execId = executorId
-      println(s"keyCounts of $executorId shakalaka boom boom")
-      context.reply(true)
-      getTaskResultExecutor.execute(new Runnable {
-        override def run(): Unit = Utils.logUncaughtExceptions {
-          try {
-            val (result, size) = env.closureSerializer.newInstance().deserialize[TaskResult[_]](serializedData) match {
-              case directResult: DirectTaskResult[_] =>
-                directResult.value()
-                (directResult, serializedData.limit())
-              case IndirectTaskResult(blockId, size) =>
-
-                val serializedTaskResult = env.blockManager.getRemoteBytes(blockId)
-                if (!serializedTaskResult.isDefined) {
-                  logError("Exception while getting task result: serializedTaskResult undefined")
-                  return
-                }
-                val deserializedResult = env.closureSerializer.newInstance().deserialize[DirectTaskResult[_]](
-                  serializedTaskResult.get)
-                env.blockManager.master.removeBlock(blockId)
-                (deserializedResult, size)
-            }
-
-            val recMap = result.value().asInstanceOf[Map[_, Int]]
-
-            keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
-            keyCountsMap.foreach(x => println(s"ExecutorId : $execId => $x"))
-
-            //            result.metrics.setResultSize(size)
-
-          } catch {
-            case cnf: ClassNotFoundException =>
-              val loader = Thread.currentThread.getContextClassLoader
-              logError("Exception while getting task result", cnf)
-            case NonFatal(ex) =>
-              logError("Exception while getting task result", ex)
-
-          }
-        }
-      })
+//    case KeyCounts(executorId, serializedData) =>
+//      val env = SparkEnv.get
+//      val execId = executorId
+//      println(s"keyCounts of $executorId shakalaka boom boom")
+//      context.reply(true)
+//      getTaskResultExecutor.execute(new Runnable {
+//        override def run(): Unit = Utils.logUncaughtExceptions {
+//          try {
+//            val (result, size) = env.closureSerializer.newInstance().deserialize[TaskResult[_]](serializedData) match {
+//              case directResult: DirectTaskResult[_] =>
+//                directResult.value()
+//                (directResult, serializedData.limit())
+//              case IndirectTaskResult(blockId, size) =>
 //
-//    case KeyCounts(executorId, data) =>
+//                val serializedTaskResult = env.blockManager.getRemoteBytes(blockId)
+//                if (!serializedTaskResult.isDefined) {
+//                  logError("Exception while getting task result: serializedTaskResult undefined")
+//                  return
+//                }
+//                val deserializedResult = env.closureSerializer.newInstance().deserialize[DirectTaskResult[_]](
+//                  serializedTaskResult.get)
+//                env.blockManager.master.removeBlock(blockId)
+//                (deserializedResult, size)
+//            }
+//
+//            val recMap = result.value().asInstanceOf[Map[_, Int]]
+//
+//            keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
+//            keyCountsMap.foreach(x => println(s"ExecutorId : $execId => $x"))
+//
+//            //            result.metrics.setResultSize(size)
+//
+//          } catch {
+//            case cnf: ClassNotFoundException =>
+//              val loader = Thread.currentThread.getContextClassLoader
+//              logError("Exception while getting task result", cnf)
+//            case NonFatal(ex) =>
+//              logError("Exception while getting task result", ex)
+//
+//          }
+//        }
+//      })
+//
+    case KeyCounts(executorId, data) =>
 //      val env = SparkEnv.get
 //      val keyCounts :Map[_, Int] = env.closureSerializer.newInstance().deserialize[Map[_, Int]](data)
-//      println(s"keyCounts of $executorId")
+      println(s"keyCounts of $executorId " + data.toString())
+
 //      keyCounts.take(5).foreach(println)
-//      context.reply(true)
+      context.reply(true)
 
     case LockAcquired(executorId) =>
       lockStartTime = System.currentTimeMillis()
@@ -283,7 +284,7 @@ private[spark] class LocalBackend(
     localEndpoint.send(StragglerInfo(executorId, partitionSize, executionTime) )
   }
 
-  override def sendKeyCounts(executorId: String, data: ByteBuffer) {
+  override def sendKeyCounts(executorId: String, data: scala.collection.immutable.HashMap[Any, Int]) {
 //    localEndpoint.send(KeyCounts(executorId, data) )
     localEndpoint.askWithRetry[Boolean](KeyCounts(executorId, data))
   }
