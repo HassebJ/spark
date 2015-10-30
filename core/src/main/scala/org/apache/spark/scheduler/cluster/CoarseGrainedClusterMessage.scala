@@ -59,7 +59,7 @@ private[spark] object CoarseGrainedClusterMessages {
 //  LockAcquired
   case class LockAcquired (executorId: String) extends CoarseGrainedClusterMessage
 
-  case class KeyCounts(executorId: String, data: ByteBuffer) extends CoarseGrainedClusterMessage
+  case class KeyCounts(executorId: String, data: scala.collection.immutable.HashMap[Any, Int]) extends CoarseGrainedClusterMessage
 
   case class StatusUpdate(executorId: String, taskId: Long, state: TaskState,
     data: SerializableBuffer) extends CoarseGrainedClusterMessage

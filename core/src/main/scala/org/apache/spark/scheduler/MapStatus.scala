@@ -34,7 +34,7 @@ private[spark] sealed trait MapStatus {
   /** Location where this task was run. */
   def location: BlockManagerId
   var partitionSize  = 0
-  var keyCounts : Map[Any, Int] =  Map[Any, Int]()
+  var keyCounts : HashMap[Any, Int] = new HashMap[Any, Int]()
 //  def iterator: Iterator[_ <: Product2[Any, Any]]
 
 

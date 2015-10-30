@@ -146,12 +146,12 @@ private[spark] class CoarseGrainedExecutorBackend(
   }
 
   override def sendKeyCounts(executorId: String, data: scala.collection.immutable.HashMap[Any, Int]) {
-//    val msg = KeyCounts(executorId, data)
-//    driver match {
-//      case Some(driverRef) =>
-//        driverRef.askWithRetry[Boolean](KeyCounts(executorId, data))
-//      case None => logWarning(s"Drop $msg because has not yet connected to driver")
-//    }
+    val msg = KeyCounts(executorId, data)
+    driver match {
+      case Some(driverRef) =>
+        driverRef.askWithRetry[Boolean](KeyCounts(executorId, data))
+      case None => logWarning(s"Drop $msg because has not yet connected to driver")
+    }
 
   }
 
