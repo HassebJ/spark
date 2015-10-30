@@ -193,11 +193,9 @@ private[spark] class LocalEndpoint(
 //      })
 //
     case KeyCounts(executorId, data) =>
-//      val env = SparkEnv.get
-//      val keyCounts :Map[_, Int] = env.closureSerializer.newInstance().deserialize[Map[_, Int]](data)
+      
       println(s"keyCounts of $executorId " + data.toString())
 
-//      keyCounts.take(5).foreach(println)
       context.reply(true)
 
     case LockAcquired(executorId) =>
