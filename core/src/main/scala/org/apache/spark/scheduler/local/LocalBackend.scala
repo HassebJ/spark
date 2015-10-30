@@ -70,7 +70,7 @@ private[spark] class LocalEndpoint(
   private var lockReleaseTime = System.currentTimeMillis()
 
   val keyCountsMap :scala.collection.concurrent.TrieMap[Any, Int] = new scala.collection.concurrent.TrieMap[Any, Int]()
-   // with scala.collection.mutable.SynchronizedMap[Int, Int]
+
 
   private val THREADS = SparkEnv.get.conf.getInt("spark.resultGetter.threads", 4)
   private val getTaskResultExecutor = ThreadUtils.newDaemonFixedThreadPool(
@@ -149,52 +149,32 @@ private[spark] class LocalEndpoint(
       executor.stop()
       context.reply(true)
 
-//    case KeyCounts(executorId, serializedData) =>
-//      val env = SparkEnv.get
-//      val execId = executorId
-//      println(s"keyCounts of $executorId shakalaka boom boom")
-//      context.reply(true)
-//      getTaskResultExecutor.execute(new Runnable {
-//        override def run(): Unit = Utils.logUncaughtExceptions {
-//          try {
-//            val (result, size) = env.closureSerializer.newInstance().deserialize[TaskResult[_]](serializedData) match {
-//              case directResult: DirectTaskResult[_] =>
-//                directResult.value()
-//                (directResult, serializedData.limit())
-//              case IndirectTaskResult(blockId, size) =>
-//
-//                val serializedTaskResult = env.blockManager.getRemoteBytes(blockId)
-//                if (!serializedTaskResult.isDefined) {
-//                  logError("Exception while getting task result: serializedTaskResult undefined")
-//                  return
-//                }
-//                val deserializedResult = env.closureSerializer.newInstance().deserialize[DirectTaskResult[_]](
-//                  serializedTaskResult.get)
-//                env.blockManager.master.removeBlock(blockId)
-//                (deserializedResult, size)
-//            }
-//
-//            val recMap = result.value().asInstanceOf[Map[_, Int]]
-//
-//            keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
-//            keyCountsMap.foreach(x => println(s"ExecutorId : $execId => $x"))
-//
-//            //            result.metrics.setResultSize(size)
-//
-//          } catch {
-//            case cnf: ClassNotFoundException =>
-//              val loader = Thread.currentThread.getContextClassLoader
-//              logError("Exception while getting task result", cnf)
-//            case NonFatal(ex) =>
-//              logError("Exception while getting task result", ex)
-//
-//          }
-//        }
-//      })
-//
     case KeyCounts(executorId, data) =>
-      
-      println(s"keyCounts of $executorId " + data.toString())
+
+      println(s"keyCounts of $executorId " )
+      val recMap = data.asInstanceOf[HashMap[_, Int]]
+
+      keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
+//      keyCountsMap.take(5).foreach(x => println(s"ExecutorId : $executorId => $x"))
+      val kcArray = keyCountsMap.take(5).toArray
+//      kcArray.foreach(k => println(k._1))
+
+
+
+      //
+//      class DomainPartitioner extends Partitioner {
+//        def numPartitions = 2 //get number of executors
+//        def getPartition(key: Any): Int = key match {
+//
+//          case "five" => {
+//            println("test")
+//            1
+//          }
+//          case _ => 0
+//        }
+//
+//        override def equals(other: Any): Boolean = other.isInstanceOf[DomainPartitioner]
+//      }
 
       context.reply(true)
 

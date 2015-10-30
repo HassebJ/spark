@@ -153,6 +153,8 @@ private[spark] class Executor(
     }
   }
 
+
+
   def releaseLock(): Unit = {
     lock.release()
     lockReleaseTime = System.currentTimeMillis() - lockStartTime
@@ -193,6 +195,14 @@ private[spark] class Executor(
       if (task != null) {
         task.kill(interruptThread)
       }
+    }
+
+    def lockExecutor(): Unit ={
+      execBackend.lockAcquired(executorId)
+      lockStartTime = System.currentTimeMillis()
+      lock.acquire()
+      lock.acquire()
+      lock.release()
     }
 
     override def run(): Unit = {
@@ -262,41 +272,18 @@ private[spark] class Executor(
         if(value.isInstanceOf[MapStatus]){
           isShuffleTask = true
           val keyCounts = value.asInstanceOf[MapStatus].keyCounts
-//          val keyCountBytes = resultSer.serialize(value.asInstanceOf[MapStatus].keyCounts)
-//
-//          val directKeyCount = new DirectTaskResult(keyCountBytes, accumUpdates, task.metrics.orNull)
-//          val serializedDirectKeyCount = ser.serialize(directKeyCount)
-//          val resultSize = serializedDirectKeyCount.limit
-//
-//          val serializedKeyCount: ByteBuffer = {
-//            if (maxResultSize > 0 && resultSize > maxResultSize) {
-//              logWarning(s"Finished $taskName (TID $taskId). Result is larger than maxResultSize " +
-//                s"(${Utils.bytesToString(resultSize)} > ${Utils.bytesToString(maxResultSize)}), " +
-//                s"dropping it.")
-//              ser.serialize(new IndirectTaskResult[Any](TaskResultBlockId(taskId), resultSize))
-//            } else if (resultSize >= akkaFrameSize - AkkaUtils.reservedSizeBytes) {
-//              val blockId = TaskResultBlockId(taskId)
-//              env.blockManager.putBytes(
-//                blockId, serializedDirectKeyCount, StorageLevel.MEMORY_AND_DISK_SER)
-//              logInfo(
-//                s"Finished $taskName (TID $taskId). $resultSize bytes result sent via BlockManager)")
-//              ser.serialize(new IndirectTaskResult[Any](blockId, resultSize))
-//            } else {
-//              logInfo(s"Finished $taskName (TID $taskId). $resultSize bytes result sent to driver")
-//              serializedDirectKeyCount
-//            }
-//          }
 
-//          execBackend.sendKeyCounts(executorId, serializedKeyCount)
+          //send key counts from executor to driver
           execBackend.sendKeyCounts(executorId, keyCounts)
-
+          //send straggler info
           execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
             (taskFinish - taskStart) - task.executorDeserializeTime)
 
-//          value.asInstanceOf[MapStatus].keyCounts = null
+          value.asInstanceOf[MapStatus].keyCounts = null
         }else{
           isShuffleTask = false
         }
+
         val valueBytes = resultSer.serialize(value)
         val afterSerialization = System.currentTimeMillis()
 
@@ -334,13 +321,12 @@ private[spark] class Executor(
             serializedDirectResult
           }
         }
-//        if(isShuffleTask == true){
-//          execBackend.lockAcquired(executorId)
-//          lockStartTime = System.currentTimeMillis()
-//          lock.acquire()
-//          lock.acquire()
-//          lock.release()
-//        }
+        //lock only if its a shuffle task cause in case of Result task its the last one so no need to lock
+        //initial mechanism used to apply locks
+        //might be redundant because we are using .ask method to send keyCounts which itself is blocking
+        if(isShuffleTask == true){
+          lockExecutor()
+        }
 
         execBackend.statusUpdate(taskId, TaskState.FINISHED, serializedResult)
 
@@ -387,9 +373,6 @@ private[spark] class Executor(
         env.blockManager.memoryStore.releaseUnrollMemoryForThisThread()
         runningTasks.remove(taskId)
       }
-    //put locks here only if current task is a shuffle task and not a result task
-
-
 
     }
 

@@ -112,12 +112,8 @@ private[spark] class HashShuffleReader[K, C](
         sorter.insertAll(aggregatedIter)
         context.taskMetrics.incMemoryBytesSpilled(sorter.memoryBytesSpilled)
         context.taskMetrics.incDiskBytesSpilled(sorter.diskBytesSpilled)
-//        println("\n<<<<<<<<<<<<<<<<<< Sorted Iter  >>>>>>>>>>>>>>>>>")
-//        sorter.iterator.foreach(println)
         sorter.iterator
       case None =>
-//        println("\n<<<<<<<<<<<<<<<<<< inner Aggregated Iter  >>>>>>>>>>>>>>>>>")
-//        aggregatedIter.foreach(println)
         aggregatedIter
     }
 
