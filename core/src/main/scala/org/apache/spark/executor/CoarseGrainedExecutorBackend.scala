@@ -22,6 +22,7 @@ import java.nio.ByteBuffer
 
 import org.apache.hadoop.conf.Configuration
 
+import scala.collection.concurrent.TrieMap
 import scala.collection.mutable
 import scala.util.{Failure, Success}
 
@@ -44,6 +45,8 @@ private[spark] class CoarseGrainedExecutorBackend(
     userClassPath: Seq[URL],
     env: SparkEnv)
   extends ThreadSafeRpcEndpoint with ExecutorBackend with Logging {
+
+
 
   Utils.checkHostPort(hostPort, "Expected hostport")
 
@@ -108,6 +111,13 @@ private[spark] class CoarseGrainedExecutorBackend(
         executor.killTask(taskId, interruptThread)
       }
 
+    case CustomPartitoner(cumFrqncy, numExecutors, speedUp, partitionId) =>
+      println("in custom partitoner")
+      cumFrqncy.asInstanceOf[TrieMap[_, Int]].foreach(println)
+      println(s"Lock released by Executor: $executorId")
+
+      executor.releaseLock(cumFrqncy.asInstanceOf[TrieMap[_, Int]], numExecutors, speedUp)
+
     case StopExecutor =>
       logInfo("Driver commanded a shutdown")
       executor.stop()
@@ -115,8 +125,8 @@ private[spark] class CoarseGrainedExecutorBackend(
       rpcEnv.shutdown()
 
     case ReleaseLock =>
-      println(s"Lock released by Executor: $executorId")
-      executor.releaseLock()
+      println(s"IN RELEASE LOCK: SOMETHING WRONG HAPPENED! Lock released by Executor: $executorId")
+//      executor.releaseLock()
   }
 
   override def onDisconnected(remoteAddress: RpcAddress): Unit = {

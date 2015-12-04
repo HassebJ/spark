@@ -23,7 +23,7 @@ import java.nio.ByteBuffer
 import scala.collection.mutable.HashMap
 
 import org.apache.spark.metrics.MetricsSystem
-import org.apache.spark.{TaskContextImpl, TaskContext}
+import org.apache.spark.{DomainPartitioner, Partitioner, TaskContextImpl, TaskContext}
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.serializer.SerializerInstance
 import org.apache.spark.unsafe.memory.TaskMemoryManager
@@ -65,7 +65,9 @@ private[spark] abstract class Task[T](
   final def run(
     taskAttemptId: Long,
     attemptNumber: Int,
-    metricsSystem: MetricsSystem)
+    metricsSystem: MetricsSystem,
+    customPartitioner: DomainPartitioner,
+    partitionerAvailable: Boolean)
   : (T, AccumulatorUpdates) = {
     context = new TaskContextImpl(
       stageId = stageId,
@@ -74,7 +76,9 @@ private[spark] abstract class Task[T](
       attemptNumber = attemptNumber,
       taskMemoryManager = taskMemoryManager,
       metricsSystem = metricsSystem,
-      runningLocally = false)
+      runningLocally = false,
+    customPartitioner = customPartitioner,
+      isPartitionerAvailable = partitionerAvailable)
     TaskContext.setTaskContext(context)
     context.taskMetrics.setHostname(Utils.localHostName())
     context.taskMetrics.setAccumulatorsUpdater(context.collectInternalAccumulators)

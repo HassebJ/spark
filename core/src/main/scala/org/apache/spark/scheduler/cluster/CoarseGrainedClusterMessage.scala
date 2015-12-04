@@ -23,6 +23,8 @@ import org.apache.spark.TaskState.TaskState
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.util.{SerializableBuffer, Utils}
 
+import scala.collection.concurrent.TrieMap
+
 private[spark] sealed trait CoarseGrainedClusterMessage extends Serializable
 
 private[spark] object CoarseGrainedClusterMessages {
@@ -33,6 +35,9 @@ private[spark] object CoarseGrainedClusterMessages {
   case class LaunchTask(data: SerializableBuffer) extends CoarseGrainedClusterMessage
 
   case class KillTask(taskId: Long, executor: String, interruptThread: Boolean)
+    extends CoarseGrainedClusterMessage
+
+  case class CustomPartitoner(cumFrqncy: TrieMap[Any, Int], numExecutors: Int, speedUp: Int, bucketId: Int)
     extends CoarseGrainedClusterMessage
 
   case object RegisteredExecutor extends CoarseGrainedClusterMessage

@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 
-
+import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet}
 import scala.language.existentials
 
@@ -41,11 +41,42 @@ import scala.util.control.NonFatal
  * coarse-grained Mesos mode or standalone processes for Spark's standalone deploy mode
  * (spark.deploy.*).
  */
+
+
+
 private[spark]
 class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: RpcEnv)
   extends ExecutorAllocationClient with SchedulerBackend with Logging
 {
+  class StragglerInfo (val executorId: String,
+                       val bucketSize: Int,
+                       val executionTime: Long,
+                       val speed: Int)
+
+  //  class DomainPartitioner(keyCounts: Map[Any, Int], numExecutors: Int ) extends Partitioner with Serializable {
+  //    def numPartitions = numExecutors //get number of executors
+  //    def getPartition(key: Any): Int = keyCounts.get(key) match {
+  //        case Some(x)  =>
+  //          if(x.toDouble*100/20 > speedUp){
+  //            //straggler
+  //            0
+  //          }else{
+  //            //nonstraggler
+  //            1
+  //          }
+  //        case _ => //nonstraggler
+  //          1
+  //
+  //      }
+  //
+  //    override def equals(other: Any): Boolean = other.isInstanceOf[DomainPartitioner]
+  //
+  //  }
+
+  //to keep an aggregate of all the key values sent by executors
   val keyCountsMap :scala.collection.concurrent.TrieMap[Any, Int] = new scala.collection.concurrent.TrieMap[Any, Int]()
+  //to keep the execution speed info sent by executors
+  val stragglerInfoMap = new HashMap[String, StragglerInfo]
   // Use an atomic variable to track total number of cores in the cluster for simplicity and speed
   var totalCoreCount = new AtomicInteger(0)
   // Total number of executors that are currently registered
@@ -67,6 +98,11 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
   // Number of executors requested from the cluster manager that have not registered yet
   private var numPendingExecutors = 0
 
+  private var numInfoReceived = new AtomicInteger(0)
+
+  private var stragglerTuple = ("0",Double.MaxValue)
+  private var avgSpeedTuple = (0,0)
+
   private val listenerBus = scheduler.sc.listenerBus
 
   private val THREADS = SparkEnv.get.conf.getInt("spark.resultGetter.threads", 4)
@@ -87,6 +123,7 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     override protected def log = CoarseGrainedSchedulerBackend.this.log
 
     private val addressToExecutorId = new HashMap[RpcAddress, String]
+    var lockStartTime = System.currentTimeMillis()
 
     private val reviveThread =
       ThreadUtils.newDaemonSingleThreadScheduledExecutor("driver-revive-thread")
@@ -129,62 +166,27 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
             logWarning(s"Attempted to kill task $taskId for unknown executor $executorId.")
         }
 
-//      case KeyCounts(executorId, serializedData) =>
-//        val env = SparkEnv.get
-//        val execId = executorId
-//        println(s"keyCounts of $executorId shakalaka boom boom")
-//        getTaskResultExecutor.execute(new Runnable {
-//          override def run(): Unit = Utils.logUncaughtExceptions {
-//            try {
-//              val (result, size) = env.closureSerializer.newInstance().deserialize[TaskResult[_]](serializedData) match {
-//                case directResult: DirectTaskResult[_] =>
-//                  directResult.value()
-//                  (directResult, serializedData.limit())
-//                case IndirectTaskResult(blockId, size) =>
-//
-//                  val serializedTaskResult = env.blockManager.getRemoteBytes(blockId)
-//                  if (!serializedTaskResult.isDefined) {
-//                    logError("Exception while getting task result: serializedTaskResult undefined")
-//                    return
-//                  }
-//                  val deserializedResult = env.closureSerializer.newInstance().deserialize[DirectTaskResult[_]](
-//                    serializedTaskResult.get)
-//                  env.blockManager.master.removeBlock(blockId)
-//                  (deserializedResult, size)
-//              }
-//
-//              val recMap = result.value().asInstanceOf[Map[_, Int]]
-//
-//              keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
-//              keyCountsMap.foreach(x => println(s"ExecutorId : $execId => $x"))
-//
-//            } catch {
-//              case cnf: ClassNotFoundException =>
-//                val loader = Thread.currentThread.getContextClassLoader
-//                logError("Exception while getting task result", cnf)
-//              case NonFatal(ex) =>
-//                logError("Exception while getting task result", ex)
-//
-//            }
-//          }
-//        })
-
       case StragglerInfo(executorId, partitionSize, executionTime) =>
         println(s"executorId: $executorId bucketSize: $partitionSize executionTime: $executionTime")
 
-      case LockAcquired(executorId) =>
-        val lockStartTime = System.currentTimeMillis()
-        println(s"Lock for $executorId received by driver \nPress any key to release the lock...")
-        Console.readLine()
-
-        val lockReleaseTime = System.currentTimeMillis() - lockStartTime
-        println(s"Lock for $executorId kept for $lockReleaseTime ms ")
-        executorDataMap.get(executorId) match {
-          case Some(executorInfo) =>
-            executorInfo.executorEndpoint.send(ReleaseLock)
-          case None =>
-            logWarning(s"Driver unable to release lock for executor: $executorId")
+        val execSpeed = partitionSize/executionTime
+        if (execSpeed < stragglerTuple._2){
+          stragglerTuple = (executorId, execSpeed)
         }
+        stragglerInfoMap.put(executorId, new StragglerInfo(executorId, partitionSize, executionTime, execSpeed.toInt))
+
+      case LockAcquired(executorId) =>
+        lockStartTime = System.currentTimeMillis()
+        println(s"Lock for $executorId received by driver \nPress any key to release the lock...")
+//        Console.readLine()
+
+
+//        executorDataMap.get(executorId) match {
+//          case Some(executorInfo) =>
+//            executorInfo.executorEndpoint.send(ReleaseLock)
+//          case None =>
+//            logWarning(s"Driver unable to release lock for executor: $executorId")
+//        }
 
     }
 
@@ -221,13 +223,19 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
       case KeyCounts(executorId, data) =>
 
-        println(s"keyCounts of $executorId " )
+        println(s"keyCounts of $executorId received")
         val recMap = data.asInstanceOf[scala.collection.immutable.HashMap[_, Int]]
+
+        numInfoReceived.incrementAndGet()
 
         keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
         keyCountsMap.take(5).foreach(x => println(s"ExecutorId : $executorId => $x"))
-
         context.reply(true)
+        println("numInfoReceived: "+ numInfoReceived+ "== numExistingExecutors: "+ (numExistingExecutors))
+        if (numInfoReceived.intValue() == numExistingExecutors ){
+          numInfoReceived.set(0)
+          sendPartitoner()
+        }
 
       case StopExecutors =>
         logInfo("Asking each executor to shut down")
@@ -242,6 +250,41 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
       case RetrieveSparkProps =>
         context.reply(sparkProperties)
+
+    }
+
+//
+//    //generate the customized partitioner and broadcast to all executors
+    private def sendPartitoner(): Unit = {
+      val nonStragglers = stragglerInfoMap.filter(x => x._1 != stragglerTuple._1).map(x => (x._2.bucketSize, x._2.executionTime ))
+
+      val answerTuple = nonStragglers.reduce((x, y) =>
+        (x._1 + y._1, x._2 + y._2)
+      )
+      println("total buckets / total time " +answerTuple )
+      val avgNonStragglerSpeed =  (answerTuple._1.toDouble / answerTuple._2)
+
+      val speedRatio = avgNonStragglerSpeed/stragglerTuple._2
+
+      println("avgNonStragglerSpeed: "+ avgNonStragglerSpeed + " speedRatio:" + speedRatio +" stragglerSpeed"+ stragglerTuple._2)
+      val speedUp = avgNonStragglerSpeed*100/(avgNonStragglerSpeed+stragglerTuple._2)
+      println("% of normalexectorspeed: " + avgNonStragglerSpeed*100/(avgNonStragglerSpeed+stragglerTuple._2))
+      val sortedMap = collection.immutable.ListMap(keyCountsMap.toSeq.sortWith(_._2 > _._2):_*)
+      var accum = 0
+      val cumFrqncy = sortedMap.mapValues(frqncy => {
+        accum += frqncy
+        accum
+      })
+
+//      val customPartitoner = newDomainPartioner(cumFrqncy, executorDataMap.size)
+
+        val msg = CustomPartitoner(keyCountsMap, executorDataMap.size, speedUp.toInt, 0)
+        executorDataMap.foreach(x => {
+          val lockReleaseTime = System.currentTimeMillis() - lockStartTime
+          println(s"Lock for ${x._1} kept for $lockReleaseTime ms ")
+          x._2.executorEndpoint.send(msg)
+        })
+
 
     }
 

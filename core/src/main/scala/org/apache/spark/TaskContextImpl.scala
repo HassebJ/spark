@@ -33,7 +33,9 @@ private[spark] class TaskContextImpl(
     override val taskMemoryManager: TaskMemoryManager,
     @transient private val metricsSystem: MetricsSystem,
     val runningLocally: Boolean = false,
-    val taskMetrics: TaskMetrics = TaskMetrics.empty)
+    val taskMetrics: TaskMetrics = TaskMetrics.empty,
+    val customPartitioner: DomainPartitioner,
+    val isPartitionerAvailable: Boolean)
   extends TaskContext
   with Logging {
 
@@ -48,6 +50,13 @@ private[spark] class TaskContextImpl(
 
   // Whether the task has completed.
   @volatile private var completed: Boolean = false
+
+  override def getCustomPartitioner() : DomainPartitioner = {
+    customPartitioner
+  }
+  override def isPartitionerAvailable_() : Boolean = {
+    isPartitionerAvailable
+  }
 
   override def addTaskCompletionListener(listener: TaskCompletionListener): this.type = {
     onCompleteCallbacks += listener

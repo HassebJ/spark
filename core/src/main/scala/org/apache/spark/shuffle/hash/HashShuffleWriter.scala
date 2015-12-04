@@ -59,7 +59,7 @@ private[spark] class HashShuffleWriter[K, V](
     val (records, printRecords) = tempRecords.duplicate
     printRecords.foreach(kv => {
       val bucketId = dep.partitioner.getPartition(kv._1)
-//      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
+      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
 
 
     })
@@ -78,7 +78,7 @@ private[spark] class HashShuffleWriter[K, V](
 
     for (elem <- iter) {
       val bucketId = dep.partitioner.getPartition(elem._1)
-//      println("BucketId "+ bucketId +" " + elem)
+      println("BucketId "+ bucketId +" " + elem)
       shuffle.writers(bucketId).write(elem._1, elem._2)
     }
   }

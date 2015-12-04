@@ -31,6 +31,7 @@ import org.apache.spark.storage.{StorageLevel, TaskResultBlockId}
 import org.apache.spark.unsafe.memory.TaskMemoryManager
 import org.apache.spark.util._
 
+import scala.collection.concurrent.TrieMap
 import scala.concurrent.Lock
 import scala.collection.JavaConversions._
 import scala.collection.mutable.{ArrayBuffer, HashMap}
@@ -51,6 +52,26 @@ private[spark] class Executor(
     isLocal: Boolean = false)
   extends Logging {
 
+//  class DomainPartitioner(keyCounts: Map[Any, Int], numExecutors: Int , speedUp: Int) extends Partitioner with Serializable {
+//    def numPartitions = numExecutors //get number of executors
+//    def getPartition(key: Any): Int = keyCounts.get(key) match {
+//        case Some(x)  =>
+//          if(x.toDouble*100/20 > speedUp){
+//            //straggler
+//            0
+//          }else{
+//            //nonstraggler
+//            1
+//          }
+//        case _ => //nonstraggler
+//          1
+//
+//      }
+//
+//    override def equals(other: Any): Boolean = other.isInstanceOf[DomainPartitioner]
+//
+//  }
+
   logInfo(s"Starting executor ID $executorId on host $executorHostname")
 
   // Application dependencies (added through SparkContext) that we've fetched so far on this node.
@@ -63,11 +84,13 @@ private[spark] class Executor(
   private val conf = env.conf
 
   private val lock = new Lock()
+  var customPartitoner: DomainPartitioner = null
 
   private var lockStartTime = System.currentTimeMillis()
   private var lockReleaseTime = System.currentTimeMillis()
 
   private var isShuffleTask : Boolean = true
+  private var isPartitonerAvailable : Boolean = false
 
   // No ip or host:port - just hostname
   Utils.checkHost(executorHostname, "Expected executed slave to be a hostname")
@@ -155,6 +178,23 @@ private[spark] class Executor(
 
 
 
+  def releaseLock(keyCountsMap: TrieMap[_, Int], numExecutors: Int, speedUp: Int): Unit = {
+    val sortedMap = scala.collection.immutable.ListMap(keyCountsMap.toSeq.sortWith(_._2 > _._2):_*)
+    var accum = 0
+    val cumFrqncy = sortedMap.mapValues(frqncy => {
+      accum += frqncy
+      accum
+    })
+    newDomainPartioner(cumFrqncy.toMap, numExecutors,speedUp)
+    isPartitonerAvailable = true
+    lock.release()
+    lockReleaseTime = System.currentTimeMillis() - lockStartTime
+    println(s"Executor: $executorId locked for $lockReleaseTime ms")
+  }
+
+  def newDomainPartioner(keyCounts :  Map[Any, Int], numExecutors: Int, speedUp: Int ) =
+    new DomainPartitioner(keyCounts, numExecutors, speedUp)
+
   def releaseLock(): Unit = {
     lock.release()
     lockReleaseTime = System.currentTimeMillis() - lockStartTime
@@ -220,6 +260,9 @@ private[spark] class Executor(
         val (taskFiles, taskJars, taskBytes) = Task.deserializeWithDependencies(serializedTask)
         updateDependencies(taskFiles, taskJars)
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
+        if(isPartitonerAvailable){
+
+        }
         task.setTaskMemoryManager(taskMemoryManager)
 
         // If this task has been killed before we deserialized it, let's quit now. Otherwise,
@@ -243,7 +286,9 @@ private[spark] class Executor(
           val res = task.run(
             taskAttemptId = taskId,
             attemptNumber = attemptNumber,
-            metricsSystem = env.metricsSystem)
+            metricsSystem = env.metricsSystem,
+            customPartitioner = customPartitoner,
+            partitionerAvailable = isPartitonerAvailable)
           threwException = false
           res
         } finally {
@@ -271,13 +316,15 @@ private[spark] class Executor(
         //straggler metrics back to the driver
         if(value.isInstanceOf[MapStatus]){
           isShuffleTask = true
+
+          //send straggler info
+          execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
+            (taskFinish - taskStart) - task.executorDeserializeTime)
+
           val keyCounts = value.asInstanceOf[MapStatus].keyCounts
 
           //send key counts from executor to driver
           execBackend.sendKeyCounts(executorId, keyCounts)
-          //send straggler info
-          execBackend.sendStragglerInfo(executorId, value.asInstanceOf[MapStatus].partitionSize,
-            (taskFinish - taskStart) - task.executorDeserializeTime)
 
           value.asInstanceOf[MapStatus].keyCounts = null
         }else{

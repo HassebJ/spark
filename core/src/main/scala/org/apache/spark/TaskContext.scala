@@ -83,6 +83,16 @@ abstract class TaskContext extends Serializable {
   def isCompleted(): Boolean
 
   /**
+   * Returns true customPartitioner sent by the driver.
+   */
+  def getCustomPartitioner() : DomainPartitioner
+
+  /**
+   * Returns true customPartitioner sent by the driver.
+   */
+  def isPartitionerAvailable(): Boolean
+
+  /**
    * Returns true if the task has been killed.
    */
   def isInterrupted(): Boolean

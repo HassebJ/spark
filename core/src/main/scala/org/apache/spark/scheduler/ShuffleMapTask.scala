@@ -24,7 +24,7 @@ import scala.language.existentials
 
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.{ShuffledRDD, RDD}
 import org.apache.spark.shuffle.ShuffleWriter
 
 /**
@@ -64,6 +64,11 @@ private[spark] class ShuffleMapTask(
     val (rdd, dep) = ser.deserialize[(RDD[_], ShuffleDependency[_, _, _])](
       ByteBuffer.wrap(taskBinary.value), Thread.currentThread.getContextClassLoader)
     _executorDeserializeTime = System.currentTimeMillis() - deserializeStartTime
+//    if(context.isPartitionerAvailable()){
+//      var wrappedRDD = new ShuffledRDD[Any,Any,Any](rdd, context.getCustomPartitioner())
+////      rdd = new ShuffledRDD[String ,Int, Int](rdd[_<: Product2[String, Int]], context.getCustomPartitioner())
+//    }
+
 
     metrics = Some(context.taskMetrics)
     var writer: ShuffleWriter[Any, Any] = null

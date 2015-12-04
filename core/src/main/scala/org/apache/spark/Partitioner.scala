@@ -96,6 +96,28 @@ class HashPartitioner(partitions: Int) extends Partitioner {
   override def hashCode: Int = numPartitions
 }
 
+//CustomPartitoner that is supposed to 'intelligently' reshuffle partitons and assign greater # of keys to faster
+// executor and vice versa
+class DomainPartitioner(keyCounts: Map[Any, Int], numExecutors: Int , speedUp: Int) extends Partitioner {
+  def numPartitions = numExecutors //get number of executors
+  def getPartition(key: Any): Int = keyCounts.get(key) match {
+      case Some(x)  =>
+        if(x.toDouble*100/20 > speedUp){
+          //straggler
+          0
+        }else{
+          //nonstraggler
+          1
+        }
+      case _ => //nonstraggler
+        1
+
+    }
+
+  override def equals(other: Any): Boolean = other.isInstanceOf[DomainPartitioner]
+
+}
+
 /**
  * A [[org.apache.spark.Partitioner]] that partitions sortable records by range into roughly
  * equal ranges. The ranges are determined by sampling the content of the RDD passed in.
