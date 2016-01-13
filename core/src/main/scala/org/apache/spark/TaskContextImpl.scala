@@ -19,7 +19,7 @@ package org.apache.spark
 
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
-import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.executor.{ExecutorSharedVars, ExecutorBackend, TaskMetrics}
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.metrics.source.Source
 import org.apache.spark.unsafe.memory.TaskMemoryManager
@@ -32,10 +32,9 @@ private[spark] class TaskContextImpl(
     override val attemptNumber: Int,
     override val taskMemoryManager: TaskMemoryManager,
     @transient private val metricsSystem: MetricsSystem,
-    val runningLocally: Boolean = false,
     val taskMetrics: TaskMetrics = TaskMetrics.empty,
-    val customPartitioner: DomainPartitioner,
-    val isPartitionerAvailable: Boolean)
+    val sharedVars: ExecutorSharedVars,
+    val runningLocally: Boolean = false)
   extends TaskContext
   with Logging {
 
@@ -51,12 +50,20 @@ private[spark] class TaskContextImpl(
   // Whether the task has completed.
   @volatile private var completed: Boolean = false
 
-  override def getCustomPartitioner() : DomainPartitioner = {
-    customPartitioner
+  override def getSharedVars() : ExecutorSharedVars = {
+    sharedVars
   }
-  override def isPartitionerAvailable_() : Boolean = {
-    isPartitionerAvailable
-  }
+//  override def isPartitionerAvailable_() : Boolean = {
+//    isPartitionerAvailable
+//  }
+//
+//  override def getExecBackend() : ExecutorBackend = {
+//    executorBackend
+//  }
+//
+//  override def getExecId() : String = {
+//    execId
+//  }
 
   override def addTaskCompletionListener(listener: TaskCompletionListener): this.type = {
     onCompleteCallbacks += listener

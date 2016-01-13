@@ -60,13 +60,13 @@ class TaskContextSuite extends SparkFunSuite with BeforeAndAfter with LocalSpark
     val task = new ResultTask[String, String](0, 0,
       sc.broadcast(closureSerializer.serialize((rdd, func)).array), rdd.partitions(0), Seq(), 0)
     intercept[RuntimeException] {
-      task.run(0, 0, null)
+      task.run(0, 0, null, null)
     }
     assert(TaskContextSuite.completed === true)
   }
 
   test("all TaskCompletionListeners should be called even if some fail") {
-    val context = new TaskContextImpl(0, 0, 0, 0, null, null)
+    val context = new TaskContextImpl(0, 0, 0, 0, null, null, null, null)
     val listener = mock(classOf[TaskCompletionListener])
     context.addTaskCompletionListener(_ => throw new Exception("blah"))
     context.addTaskCompletionListener(listener)

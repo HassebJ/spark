@@ -20,7 +20,7 @@ package org.apache.spark
 import java.io.Serializable
 
 import org.apache.spark.annotation.DeveloperApi
-import org.apache.spark.executor.TaskMetrics
+import org.apache.spark.executor.{ExecutorSharedVars, ExecutorBackend, TaskMetrics}
 import org.apache.spark.metrics.source.Source
 import org.apache.spark.unsafe.memory.TaskMemoryManager
 import org.apache.spark.util.TaskCompletionListener
@@ -83,14 +83,24 @@ abstract class TaskContext extends Serializable {
   def isCompleted(): Boolean
 
   /**
-   * Returns true customPartitioner sent by the driver.
+   * Returns  customPartitioner sent by the driver.
    */
-  def getCustomPartitioner() : DomainPartitioner
-
-  /**
-   * Returns true customPartitioner sent by the driver.
-   */
-  def isPartitionerAvailable(): Boolean
+  def getSharedVars() : ExecutorSharedVars
+//
+//  /**
+//   * Returns true customPartitioner is available.
+//   */
+//  def isPartitionerAvailable_(): Boolean
+//
+//  /**
+//   * Returns ExecutorBackend.
+//   */
+//  def getExecBackend() : ExecutorBackend
+//
+//  /**
+//   * Returns ExecutorBackend.
+//   */
+//  def getExecId() : String
 
   /**
    * Returns true if the task has been killed.

@@ -49,7 +49,7 @@ private[spark] class SortShuffleWriter[K, V, C](
   context.taskMetrics.shuffleWriteMetrics = Some(writeMetrics)
 
   /** Write a bunch of records to this task's output */
-  override def write(tempRecords: Iterator[Product2[K, V]]): Unit = {
+  override def write(tempRecords: Iterator[Product2[K, V]], context: TaskContext): Unit = {
     sorter = if (dep.mapSideCombine) {
       require(dep.aggregator.isDefined, "Map-side combine without Aggregator specified!")
       new ExternalSorter[K, V, C](

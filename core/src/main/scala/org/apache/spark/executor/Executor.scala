@@ -283,12 +283,17 @@ private[spark] class Executor(
         var threwException = true
 //        var status
         val (value, accumUpdates) = try {
+          val sharedVars = new ExecutorSharedVars(
+            customPartitioner = customPartitoner,
+            isPartitionerAvailable = isPartitonerAvailable,
+            executorBackend = execBackend,
+            execId = executorId)
+
           val res = task.run(
             taskAttemptId = taskId,
             attemptNumber = attemptNumber,
             metricsSystem = env.metricsSystem,
-            customPartitioner = customPartitoner,
-            partitionerAvailable = isPartitonerAvailable)
+            sharedVars = sharedVars)
           threwException = false
           res
         } finally {

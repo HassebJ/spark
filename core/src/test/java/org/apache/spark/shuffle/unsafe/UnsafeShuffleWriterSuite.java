@@ -75,6 +75,7 @@ public class UnsafeShuffleWriterSuite {
   SparkConf conf;
   final Serializer serializer = new KryoSerializer(new SparkConf());
   TaskMetrics taskMetrics;
+  TaskContext context = null;
 
   @Mock(answer = RETURNS_SMART_NULLS) ShuffleMemoryManager shuffleMemoryManager;
   @Mock(answer = RETURNS_SMART_NULLS) BlockManager blockManager;
@@ -267,13 +268,14 @@ public class UnsafeShuffleWriterSuite {
       }
     }
     final UnsafeShuffleWriter<Object, Object> writer = createWriter(true);
-    writer.write(new BadRecords());
+
+    writer.write(new BadRecords(), context);
   }
 
   @Test
   public void writeEmptyIterator() throws Exception {
     final UnsafeShuffleWriter<Object, Object> writer = createWriter(true);
-    writer.write(Iterators.<Product2<Object, Object>>emptyIterator());
+    writer.write(Iterators.<Product2<Object, Object>>emptyIterator(), context);
     final Option<MapStatus> mapStatus = writer.stop(true);
     assertTrue(mapStatus.isDefined());
     assertTrue(mergedOutputFile.exists());
@@ -293,7 +295,7 @@ public class UnsafeShuffleWriterSuite {
       dataToWrite.add(new Tuple2<Object, Object>(i, i));
     }
     final UnsafeShuffleWriter<Object, Object> writer = createWriter(true);
-    writer.write(dataToWrite.iterator());
+    writer.write(dataToWrite.iterator(), context);
     final Option<MapStatus> mapStatus = writer.stop(true);
     assertTrue(mapStatus.isDefined());
     assertTrue(mergedOutputFile.exists());
@@ -415,7 +417,7 @@ public class UnsafeShuffleWriterSuite {
     for (int i = 0; i < 128 + 1; i++) {
       dataToWrite.add(new Tuple2<Object, Object>(i, bigByteArray));
     }
-    writer.write(dataToWrite.iterator());
+    writer.write(dataToWrite.iterator(), null);
     verify(shuffleMemoryManager, times(5)).tryToAcquire(anyLong());
     assertEquals(2, spillFilesCreated.size());
     writer.stop(true);
@@ -441,7 +443,7 @@ public class UnsafeShuffleWriterSuite {
     for (int i = 0; i < UnsafeShuffleWriter.INITIAL_SORT_BUFFER_SIZE; i++) {
       dataToWrite.add(new Tuple2<Object, Object>(i, i));
     }
-    writer.write(dataToWrite.iterator());
+    writer.write(dataToWrite.iterator(), null);
     verify(shuffleMemoryManager, times(5)).tryToAcquire(anyLong());
     assertEquals(2, spillFilesCreated.size());
     writer.stop(true);
@@ -463,7 +465,7 @@ public class UnsafeShuffleWriterSuite {
     final byte[] bytes = new byte[(int) (UnsafeShuffleExternalSorter.DISK_WRITE_BUFFER_SIZE * 2.5)];
     new Random(42).nextBytes(bytes);
     dataToWrite.add(new Tuple2<Object, Object>(1, ByteBuffer.wrap(bytes)));
-    writer.write(dataToWrite.iterator());
+    writer.write(dataToWrite.iterator(), null);
     writer.stop(true);
     assertEquals(
       HashMultiset.create(dataToWrite),
@@ -524,7 +526,7 @@ public class UnsafeShuffleWriterSuite {
     try {
       // Here, we write through the public `write()` interface instead of the test-only
       // `insertRecordIntoSorter` interface:
-      writer.write(Collections.singletonList(hugeRecord).iterator());
+      writer.write(Collections.singletonList(hugeRecord).iterator(), null);
       fail("Expected exception to be thrown");
     } catch (IOException e) {
       // Pass

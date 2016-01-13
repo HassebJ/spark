@@ -18,12 +18,13 @@
 package org.apache.spark.shuffle.hash
 
 import org.apache.spark._
-import org.apache.spark.executor.ShuffleWriteMetrics
+import org.apache.spark.executor.{ExecutorSharedVars, ExecutorBackend, ShuffleWriteMetrics}
 import org.apache.spark.scheduler.MapStatus
 import org.apache.spark.serializer.Serializer
 import org.apache.spark.shuffle._
 import org.apache.spark.storage.DiskBlockObjectWriter
 
+import scala.concurrent.Lock
 import scala.util.Random
 
 private[spark] class HashShuffleWriter[K, V](
@@ -41,6 +42,7 @@ private[spark] class HashShuffleWriter[K, V](
   // and then call stop() with success = false if they get an exception, we want to make sure
   // we don't try deleting files, etc twice.
   private var stopping = false
+  private val lock = new Lock()
 
   private val writeMetrics = new ShuffleWriteMetrics()
   metrics.shuffleWriteMetrics = Some(writeMetrics)
@@ -51,7 +53,7 @@ private[spark] class HashShuffleWriter[K, V](
     writeMetrics)
 
   /** Write a bunch of records to this task's output */
-  override def write(tempRecords: Iterator[Product2[K, V]]): Unit = {
+  override def write(tempRecords: Iterator[Product2[K, V]], context: TaskContext): Unit = {
     val randInit = new Random(System.currentTimeMillis)
     val randNumber = randInit.nextString(4)
 
@@ -76,11 +78,21 @@ private[spark] class HashShuffleWriter[K, V](
       records
     }
 
+    lockExecutor(context.getSharedVars())
     for (elem <- iter) {
       val bucketId = dep.partitioner.getPartition(elem._1)
       println("BucketId "+ bucketId +" " + elem)
       shuffle.writers(bucketId).write(elem._1, elem._2)
     }
+  }
+
+  def lockExecutor(sharedVars: ExecutorSharedVars): Unit ={
+    sharedVars.getExecBackend().lockAcquired(sharedVars.getExecId())
+    println("Executor locked!")
+//    lockStartTime = System.currentTimeMillis()
+    lock.acquire()
+    lock.acquire()
+    lock.release()
   }
 
   /** Close this writer, passing along whether the map completed */
