@@ -19,6 +19,8 @@ package org.apache.spark.executor
 
 import java.nio.ByteBuffer
 
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.CustomPartitoner
+
 import scala.collection.JavaConversions._
 
 import org.apache.mesos.protobuf.ByteString
@@ -49,6 +51,9 @@ private[spark] class MesosExecutorBackend
   }
  //TODO yet to be implemented for mesos
   override def sendStragglerInfo(executorId: String, partitionSize: Int, executionTime: Long) {
+  }
+  override def sendPartitionerLocal(msg:CustomPartitoner ): Unit = {
+
   }
 
   override def sendKeyCounts(executorId: String, data: scala.collection.immutable.HashMap[Any, Int]) {

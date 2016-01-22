@@ -57,12 +57,11 @@ private[spark] class HashShuffleWriter[K, V](
     val randInit = new Random(System.currentTimeMillis)
     val randNumber = randInit.nextString(4)
 
-    println(s"\n<<<<<<<<<<<<<<<<<< $mapId >>>>>>>>>>>>>>>>>")
+//    println(s"\n<<<<<<<<<<<<<<<<<< $mapId >>>>>>>>>>>>>>>>>")
     val (records, printRecords) = tempRecords.duplicate
     printRecords.foreach(kv => {
       val bucketId = dep.partitioner.getPartition(kv._1)
-      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
-
+//      println("MapId "+ mapId +" BucketId "+ bucketId +" " + kv)
 
     })
 
@@ -78,21 +77,35 @@ private[spark] class HashShuffleWriter[K, V](
       records
     }
 
-    lockExecutor(context.getSharedVars())
+
+    println("is partitioner avaiable field: " + context.getSharedVars().isPartitionerAvailable)
+
+//    lockExecutor(context.getSharedVars())
     for (elem <- iter) {
-      val bucketId = dep.partitioner.getPartition(elem._1)
-      println("BucketId "+ bucketId +" " + elem)
+
+      val bucketId = if(context.getSharedVars().isPartitionerAvailable_()){
+        context.getSharedVars().getCustomPartitioner().getPartition(elem._1)
+      }else{
+        dep.partitioner.getPartition(elem._1)
+      }
+
+      if(context.getSharedVars().isPartitionerAvailable_()){
+        println("partitioner true: BucketId "+ bucketId +" " + elem)
+      }else{
+        println("partitioner false: BucketId "+ bucketId +" " + elem)
+      }
+
       shuffle.writers(bucketId).write(elem._1, elem._2)
     }
   }
 
   def lockExecutor(sharedVars: ExecutorSharedVars): Unit ={
     sharedVars.getExecBackend().lockAcquired(sharedVars.getExecId())
-    println("Executor locked!")
-//    lockStartTime = System.currentTimeMillis()
-    lock.acquire()
-    lock.acquire()
-    lock.release()
+    println("Executor locked! at hashShuffleWrite")
+////    lockStartTime = System.currentTimeMillis()
+//    lock.acquire()
+//    lock.acquire()
+//    lock.release()
   }
 
   /** Close this writer, passing along whether the map completed */

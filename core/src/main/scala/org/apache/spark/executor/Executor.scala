@@ -26,6 +26,7 @@ import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.scheduler._
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.CustomPartitoner
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.storage.{StorageLevel, TaskResultBlockId}
 import org.apache.spark.unsafe.memory.TaskMemoryManager
@@ -185,7 +186,7 @@ private[spark] class Executor(
       accum += frqncy
       accum
     })
-    newDomainPartioner(cumFrqncy.toMap, numExecutors,speedUp)
+    customPartitoner = newDomainPartioner(cumFrqncy.toMap, numExecutors,speedUp)
     isPartitonerAvailable = true
     lock.release()
     lockReleaseTime = System.currentTimeMillis() - lockStartTime
@@ -237,6 +238,14 @@ private[spark] class Executor(
       }
     }
 
+    def sendPartitoner(msg: CustomPartitoner): Unit ={
+      execBackend.lockAcquired(executorId)
+      lockStartTime = System.currentTimeMillis()
+      //      lock.acquire()
+      //      lock.acquire()
+      //      lock.release()
+    }
+
     def lockExecutor(): Unit ={
       execBackend.lockAcquired(executorId)
       lockStartTime = System.currentTimeMillis()
@@ -261,6 +270,7 @@ private[spark] class Executor(
         updateDependencies(taskFiles, taskJars)
         task = ser.deserialize[Task[Any]](taskBytes, Thread.currentThread.getContextClassLoader)
         if(isPartitonerAvailable){
+          println("Partioner Available: " + isPartitonerAvailable)
 
         }
         task.setTaskMemoryManager(taskMemoryManager)
@@ -376,7 +386,7 @@ private[spark] class Executor(
         //lock only if its a shuffle task cause in case of Result task its the last one so no need to lock
         //initial mechanism used to apply locks
         //might be redundant because we are using .ask method to send keyCounts which itself is blocking
-        if(isShuffleTask == true){
+        if(isShuffleTask == true && isPartitonerAvailable == false){
           lockExecutor()
         }
 

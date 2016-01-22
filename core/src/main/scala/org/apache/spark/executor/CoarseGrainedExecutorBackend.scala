@@ -113,7 +113,7 @@ private[spark] class CoarseGrainedExecutorBackend(
 
     case CustomPartitoner(cumFrqncy, numExecutors, speedUp, partitionId) =>
       println("in custom partitoner")
-      cumFrqncy.asInstanceOf[TrieMap[_, Int]].foreach(println)
+//      cumFrqncy.asInstanceOf[TrieMap[_, Int]].foreach(println)
       println(s"Lock released by Executor: $executorId")
 
       executor.releaseLock(cumFrqncy.asInstanceOf[TrieMap[_, Int]], numExecutors, speedUp)
@@ -159,7 +159,8 @@ private[spark] class CoarseGrainedExecutorBackend(
     val msg = KeyCounts(executorId, data)
     driver match {
       case Some(driverRef) =>
-        driverRef.askWithRetry[Boolean](KeyCounts(executorId, data))
+//        driverRef.askWithRetry[Boolean](KeyCounts(executorId, data))
+        driverRef.send(KeyCounts(executorId, data))
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
 
@@ -173,6 +174,9 @@ private[spark] class CoarseGrainedExecutorBackend(
         driverRef.send(msg)
       case None => logWarning(s"Drop $msg because has not yet connected to driver")
     }
+
+  }
+  override def sendPartitionerLocal(msg:CustomPartitoner ): Unit = {
 
   }
 }

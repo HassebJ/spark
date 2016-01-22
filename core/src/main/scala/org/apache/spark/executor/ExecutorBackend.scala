@@ -20,6 +20,7 @@ package org.apache.spark.executor
 import java.nio.ByteBuffer
 
 import org.apache.spark.TaskState.TaskState
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.CustomPartitoner
 
 import scala.collection.immutable.HashMap
 
@@ -32,5 +33,6 @@ private[spark] trait ExecutorBackend {
   def lockAcquired(executorId: String)
 //  def sendKeyCounts(executorId: String, data: ByteBuffer)
 def sendKeyCounts(executorId: String, data: HashMap[Any, Int])
+  def sendPartitionerLocal(msg:CustomPartitoner )
 //  HashMap[Any, Int]
 }

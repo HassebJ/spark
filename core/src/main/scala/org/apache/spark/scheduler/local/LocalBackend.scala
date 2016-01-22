@@ -20,9 +20,12 @@ package org.apache.spark.scheduler.local
 import java.io.File
 import java.net.URL
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicInteger
 
+import org.apache.spark.scheduler.cluster.CoarseGrainedClusterMessages.CustomPartitoner
 import org.apache.spark.util.{ThreadUtils, Utils}
 
+import scala.collection.concurrent.TrieMap
 import scala.collection.immutable.HashMap
 import scala.collection.mutable.HashMap
 import scala.util.control.NonFatal
@@ -82,7 +85,7 @@ private[spark] class LocalEndpoint(
 
   private var stragglerTuple = ("0",Double.MaxValue)
   private var avgSpeedTuple = (0,0)
-  private var numInfoReceived = 0
+  private var numInfoReceived = new AtomicInteger(0)
 
 
   private val THREADS = SparkEnv.get.conf.getInt("spark.resultGetter.threads", 4)
@@ -106,6 +109,38 @@ private[spark] class LocalEndpoint(
         reviveOffers()
       }
 
+    case KeyCounts(executorId, data) =>
+
+      //      println(s"keyCounts of $executorId " )
+      val recMap = data.asInstanceOf[collection.immutable.HashMap[_, Int]]
+      numInfoReceived.incrementAndGet()
+
+      keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
+      val sortedMap = collection.immutable.ListMap(keyCountsMap.toSeq.sortWith(_._2 < _._2):_*)
+      //      println("sortedMap")
+      //      println(sortedMap)
+      var k = 0
+      val comFred = sortedMap.mapValues(freq => {
+        k = k+freq
+        k
+      })
+
+//      context.reply(true)
+      println("numInfoReceived "+ numInfoReceived+ "== executorDataMap size "+ (2))
+      if (numInfoReceived.intValue() ==  (2)){
+        numInfoReceived.set(0)
+        sendPartitoner()
+
+      }
+
+    case CustomPartitoner(cumFrqncy, numExecutors, speedUp, partitionId) =>
+      println("in custom partitoner")
+//      cumFrqncy.asInstanceOf[TrieMap[_, Int]].foreach(println)
+
+      println(s"Lock released by Executor")
+
+      executor.releaseLock(cumFrqncy.asInstanceOf[TrieMap[_, Int]], numExecutors, speedUp)
+
     case KillTask(taskId, interruptThread) =>
       executor.killTask(taskId, interruptThread)
 
@@ -126,61 +161,12 @@ private[spark] class LocalEndpoint(
       executor.stop()
       context.reply(true)
 
-    case KeyCounts(executorId, data) =>
-
-      println(s"keyCounts of $executorId " )
-      val recMap = data.asInstanceOf[collection.immutable.HashMap[_, Int]]
-      numInfoReceived = numInfoReceived + 1
-
-      keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
-      val sortedMap = collection.immutable.ListMap(keyCountsMap.toSeq.sortWith(_._2 < _._2):_*)
-      println("sortedMap")
-      println(sortedMap)
-      var k = 0
-      val comFred = sortedMap.mapValues(freq => {
-        k = k+freq
-        k
-      })
-//      var foldSortedMap = sortedMap.foldRight(0)((a,b) => a._2 + b)
-      println("comFred")
-      println(comFred)
-//      sortedMap.foreach(x => println(s"ExecutorId : $executorId => $x"))
-      context.reply(true)
-//      println("numInfoReceived "+ numInfoReceived+ "== executorDataMap size minus 1"+ (executorDataMap.size-1))
-//      if (numInfoReceived == executorDataMap.size -1){
-
-//      }
-//      val kcArray = keyCountsMap.take(5).toArray
-//      kcArray.foreach(k => println(k._1))
-
-
-
-      //
-//      class DomainPartitioner extends Partitioner {
-//        def numPartitions = 2 //get number of executors
-//        def getPartition(key: Any): Int = key match {
-//
-//          case "five" => {
-//            println("test")
-//            1
-//          }
-//          case _ => 0
-//        }
-//
-//        override def equals(other: Any): Boolean = other.isInstanceOf[DomainPartitioner]
-//      }
-
-
     case LockAcquired(executorId) =>
       lockStartTime = System.currentTimeMillis()
 
-      sendPartitoner()
-      println(s"Lock for $executorId received by driver \n Press any key to release the lock")
-      Console.readLine()
       lockReleaseTime = System.currentTimeMillis() - lockStartTime
       println(s"Lock kept by driver for $lockReleaseTime ms")
 
-      executor.releaseLock()
 
   }
 
@@ -190,14 +176,14 @@ private[spark] class LocalEndpoint(
     val answerTuple = nonStragglers.reduce((x, y) =>
       (x._1 + y._1, x._2 + y._2)
     )
-    println("total buckets / total time " +answerTuple )
+//    println("total buckets / total time " +answerTuple )
     val avgNonStragglerSpeed =  (answerTuple._1.toDouble / answerTuple._2)
 
     val speedRatio = avgNonStragglerSpeed/stragglerTuple._2
 
-    println("avgNonStragglerSpeed: "+ avgNonStragglerSpeed + "speedRatio:" + speedRatio +" stragglerSpeed"+ stragglerTuple._2)
+//    println("avgNonStragglerSpeed: "+ avgNonStragglerSpeed + "speedRatio: " + speedRatio +" stragglerSpeed: "+ stragglerTuple._2)
     val speedUp = avgNonStragglerSpeed*100/(avgNonStragglerSpeed+stragglerTuple._2)
-    println("%normalexectorspeed: " + speedUp)
+//    println("%normalexectorspeed: " + speedUp)
     val sortedMap = collection.immutable.ListMap(keyCountsMap.toSeq.sortWith(_._2 > _._2):_*)
     var k = 0
     val comFred = sortedMap.mapValues(freq => {
@@ -207,15 +193,24 @@ private[spark] class LocalEndpoint(
     comFred.get("one") match {
             case Some(x)  =>
               if(x.toDouble*100/20 > speedUp){
-                println("x/20 "+ (x.toDouble*100/20)+ "speedUp" + speedUp)
-                println(s"x: $x, bucket:1")
+//                println("x/20 "+ (x.toDouble*100/20)+ "speedUp" + speedUp)
+//                println(s"x: $x, bucket:1")
               }else{
-                println("x/20 "+ (x.toDouble*100/20)+ "speedUp" + speedUp)
-                println(s"x: $x, bucket:0")
+//                println("x/20 "+ (x.toDouble*100/20)+ "speedUp" + speedUp)
+//                println(s"x: $x, bucket:0")
               }
             case _ => println("default")
 
           }
+
+    val msg = CustomPartitoner(keyCountsMap, 2, speedUp.toInt, 0)
+    executorBackend.sendPartitionerLocal(msg);
+
+    //executorDataMap.foreach(x => {
+      //val lockReleaseTime = System.currentTimeMillis() - lockStartTime
+      //println(s"Lock for ${x._1} kept for $lockReleaseTime ms ")
+      //localEndpoint.send(msg)
+    //})
 
 
   }
@@ -295,8 +290,12 @@ private[spark] class LocalBackend(
   }
 
   override def sendKeyCounts(executorId: String, data: scala.collection.immutable.HashMap[Any, Int]) {
-//    localEndpoint.send(KeyCounts(executorId, data) )
-    localEndpoint.askWithRetry[Boolean](KeyCounts(executorId, data))
+    localEndpoint.send(KeyCounts(executorId, data) )
+//    localEndpoint.askWithRetry[Boolean](KeyCounts(executorId, data))
+  }
+
+  override def sendPartitionerLocal(msg:CustomPartitoner ) {
+    localEndpoint.send(msg)
   }
 
   override def applicationId(): String = appId

@@ -140,6 +140,23 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
     }
 
     override def receive: PartialFunction[Any, Unit] = {
+
+      case KeyCounts(executorId, data) =>
+
+        println(s"keyCounts of $executorId received")
+        val recMap = data.asInstanceOf[scala.collection.immutable.HashMap[_, Int]]
+
+        numInfoReceived.incrementAndGet()
+
+        keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
+        keyCountsMap.take(5).foreach(x => println(s"ExecutorId : $executorId => $x"))
+//        context.reply(true)
+        println("numInfoReceived: "+ numInfoReceived+ "== numExistingExecutors: "+ (numExistingExecutors))
+        if (numInfoReceived.intValue() == numExistingExecutors ){
+          numInfoReceived.set(0)
+          sendPartitoner()
+        }
+
       case StatusUpdate(executorId, taskId, state, data) =>
         scheduler.statusUpdate(taskId, state, data.value)
         if (TaskState.isFinished(state)) {
@@ -177,10 +194,9 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 
       case LockAcquired(executorId) =>
         lockStartTime = System.currentTimeMillis()
-        println(s"Lock for $executorId received by driver \nPress any key to release the lock...")
+        println(s"Lock for $executorId received by driver")// \nPress any key to release the lock...")
+
 //        Console.readLine()
-
-
 //        executorDataMap.get(executorId) match {
 //          case Some(executorInfo) =>
 //            executorInfo.executorEndpoint.send(ReleaseLock)
@@ -221,22 +237,6 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
         context.reply(true)
         stop()
 
-      case KeyCounts(executorId, data) =>
-
-        println(s"keyCounts of $executorId received")
-        val recMap = data.asInstanceOf[scala.collection.immutable.HashMap[_, Int]]
-
-        numInfoReceived.incrementAndGet()
-
-        keyCountsMap ++= recMap.map{ case (k,v) => k -> (v + keyCountsMap.getOrElse(k,0)) }
-        keyCountsMap.take(5).foreach(x => println(s"ExecutorId : $executorId => $x"))
-        context.reply(true)
-        println("numInfoReceived: "+ numInfoReceived+ "== numExistingExecutors: "+ (numExistingExecutors))
-        if (numInfoReceived.intValue() == numExistingExecutors ){
-          numInfoReceived.set(0)
-          sendPartitoner()
-        }
-
       case StopExecutors =>
         logInfo("Asking each executor to shut down")
         for ((_, executorData) <- executorDataMap) {
@@ -257,18 +257,17 @@ class CoarseGrainedSchedulerBackend(scheduler: TaskSchedulerImpl, val rpcEnv: Rp
 //    //generate the customized partitioner and broadcast to all executors
     private def sendPartitoner(): Unit = {
       val nonStragglers = stragglerInfoMap.filter(x => x._1 != stragglerTuple._1).map(x => (x._2.bucketSize, x._2.executionTime ))
-
       val answerTuple = nonStragglers.reduce((x, y) =>
         (x._1 + y._1, x._2 + y._2)
       )
-      println("total buckets / total time " +answerTuple )
+//      println("total buckets / total time :" +answerTuple )
       val avgNonStragglerSpeed =  (answerTuple._1.toDouble / answerTuple._2)
 
       val speedRatio = avgNonStragglerSpeed/stragglerTuple._2
 
-      println("avgNonStragglerSpeed: "+ avgNonStragglerSpeed + " speedRatio:" + speedRatio +" stragglerSpeed"+ stragglerTuple._2)
+//      println("avgNonStragglerSpeed: "+ avgNonStragglerSpeed + " speedRatio:" + speedRatio +" stragglerSpeed: "+ stragglerTuple._2)
       val speedUp = avgNonStragglerSpeed*100/(avgNonStragglerSpeed+stragglerTuple._2)
-      println("% of normalexectorspeed: " + avgNonStragglerSpeed*100/(avgNonStragglerSpeed+stragglerTuple._2))
+//      println("% of normalexectorspeed: " + avgNonStragglerSpeed*100/(avgNonStragglerSpeed+stragglerTuple._2))
       val sortedMap = collection.immutable.ListMap(keyCountsMap.toSeq.sortWith(_._2 > _._2):_*)
       var accum = 0
       val cumFrqncy = sortedMap.mapValues(frqncy => {
