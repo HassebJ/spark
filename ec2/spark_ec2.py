@@ -814,10 +814,10 @@ def setup_cluster(conn, master_nodes, slave_nodes, opts, deploy_ssh_key):
         opts=opts,
         command="rm -rf spark-ec2"
         + " && "
-        #+ "git clone {r} -b {b} spark-ec2".format(r=opts.spark_ec2_git_repo,
-        #                                          b=opts.spark_ec2_git_branch)
-        + "git clone https://github.com/ahirreddy/spark-ec2.git -b ext4-update"
+        + "git clone {r} -b {b} spark-ec2".format(r=opts.spark_ec2_git_repo,
+                                                  b=opts.spark_ec2_git_branch)
     )
+    #+ "git clone https://github.com/ahirreddy/spark-ec2.git -b ext4-update"
 
     print("Deploying files to master...")
     deploy_files(
